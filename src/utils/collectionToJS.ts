@@ -57,11 +57,16 @@ async function processCollection({
 
   const varName = toCamelCase(name);
   return `export const ${varName} = ${JSON.stringify(variables, null, 2)
-    .replace(/"([^"]+)":/g, '$1:')
+    // First handle numeric-only keys
+    .replace(/^(\s*)"(\d+)":/gm, '$1"$2":')
+    // Then handle property keys
+    .replace(/"([^"]+)":/g, (match, key) => {
+        return /^\d+$/.test(key) ? match : `${key}:`
+    })
+    // Handle linked variable references
     .replace(/"([$_a-zA-Z][$_a-zA-Z0-9]*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*(?:\.\d+)*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*)"/g, (match, p1) => {
         return p1.replace(/\.(\d+)(?=\.|$)/g, '["$1"]');
-      })
-      .replace(/([0-9]+):/g, '"$1":')};\n`;
+    })};\n`;
 }
 
 export const exportToJS = async (): Promise<string | undefined> => {
