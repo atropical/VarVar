@@ -4,16 +4,18 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 
 ## Features
 
-- Export Figma variables to JSON, CSV or CSS formats
+- Export Figma variables to JSON, CSV, CSS or JS formats
 - Identifies linked variables*
    - JSON: linked variables start with `$.VARIABLE.PATH`
+   - JS: linked variables are referenced directly like `collection.mode.variable`
+     - Numeric paths are converted to bracket notation: `collection.mode["500"]`
    - CSV: linked variables start with `=VARIABLE/PATH`
-     - **Option:** *Use row & column positions.* This will produce instead a "formula-like" (i.e. `=E7`) linking in spreadsheet programs.
+     - **Option:** *Use row & column positions.<sup>*</sup> This will produce instead a "formula-like" (i.e. `=E7`) linking in spreadsheet programs.
    - CSS: linked variables will be linked like so `--var-name: var(--VARIABLE)`
 - Preview exported data within the plugin interface
 - Automatically download exported files
 
-*Note: When dealing with linked variables that have multiple modes, the plugin will only link to the first occurrence (i.e., the first mode).
+<sup>*</sup> When dealing with linked variables that have multiple modes, the plugin will only link to the first occurrence (i.e., the first mode).
 
 ## Figma Installation
 
@@ -25,21 +27,23 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 ### Design Mode
 1. Open your Figma file containing variables
 2. Run the VarVar plugin from the Plugins menu
-3. Choose your desired export format (JSON, CSV or CSS)
+3. Choose your desired export format (JSON, JS, CSV or CSS)
 4. Click "Export Variables"
 5. The exported file will be automatically downloaded
 
 ### Dev Mode
 1. Open your Figma file containing variables
 2. Run the VarVar plugin from the Plugins menu
-3. Choose your desired export format (JSON, CSV or CSS)
+3. Choose your desired export format (JSON, JS, CSV or CSS)
 4. Click "Export Variables"
 5. The exported file will be automatically downloaded
 
 ### Preview and Copy
 
 - Toggle the "Preview output" switch to see the exported data within the plugin interface
-- Use the "Select all" button and copy (Ctrl/Cmd + C) the exported data to your clipboard
+- Use the "Select all" button and copy<sup>†</sup> (Ctrl/Cmd + C) the exported data to your clipboard
+
+<sup>†</sup> Programmatically copying is currently not supported by Figma Plugin APIs.
 
 ## Development
 
