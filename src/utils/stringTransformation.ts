@@ -7,7 +7,12 @@ export const toCssVar = (string: string, prependDoubleDash: boolean = false) => 
     return string;
 }
 
-export const toCamelCase = (string: string) => {
+export const toCamelCase = (string: string, detectAllCaps = true) => {
+
+    if (detectAllCaps && /^[A-Z][A-Z0-9_\s]*$/.test(string)) {
+        return string.replace(/\s+/g, '');
+    }
+
     return string
         .trim()
         .replace(/(?:^\w|[A-Z]|\b\w|\s+\w|\s*\d+)/g, (match, index) => {

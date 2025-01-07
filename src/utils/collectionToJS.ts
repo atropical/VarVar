@@ -20,7 +20,7 @@ async function processCollection({
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           let currentObj = variables[toCamelCase(mode.name)];
-          const parts = name.split("/").map(toCamelCase);
+          const parts = name.split("/").map((str) => toCamelCase(str));
 
           parts.forEach(async (part, i) => {
             if (i === parts.length - 1) {
@@ -32,7 +32,7 @@ async function processCollection({
                   const collPrefix = linkedVarCollection && linkedVarCollection.name !== name ? 
                     `${toCamelCase(linkedVarCollection.name)}.` : '';
                   
-                  currentObj[part] = `${collPrefix}${toCamelCase(mode.name)}.${linkedVar.name.split('/').map(toCamelCase).join('.')}`;
+                  currentObj[part] = `${collPrefix}${toCamelCase(mode.name)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}`;
                 } else {
                   currentObj[part] = '_unlinked';
                 }
