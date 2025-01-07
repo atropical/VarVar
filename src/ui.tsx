@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { Flex, Text, RadioGroup, Button, Link, Switch, Label, Input } from "figma-kit";
 import "figma-kit/styles.css";
+import { OutputFormats } from "./types";
 
 const secondaryTextStyle = {color: 'var(--figma-color-text-secondary)'};
 const App: React.FC = () => {
   let defaultFilename = `exported_variables`;
-  const [format, setFormat] = useState<"csv" | "json" | "css">("json");
+  const [format, setFormat] = useState<OutputFormats>("json");
   const [filename, setFilename] = useState<string>(defaultFilename);
   const [seeOutput, setSeeOutput] = useState<boolean>(true);
   const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(false);
@@ -62,12 +63,16 @@ const App: React.FC = () => {
     <Flex direction="column" gap="4">
         <Flex direction="column" gap="2">
           <Text style={secondaryTextStyle}>Select a format</Text>
-          <RadioGroup.Root value={format} onValueChange={(value) => setFormat(value as "csv" | "json" | "css")}>
+          <RadioGroup.Root value={format} onValueChange={(value) => setFormat(value as OutputFormats)}>
             <RadioGroup.Label>
               <RadioGroup.Item
                 value="json"
               />
               JSON
+            </RadioGroup.Label>
+            <RadioGroup.Label>
+              <RadioGroup.Item value="js" />
+              JavaScript
             </RadioGroup.Label>
             <RadioGroup.Label>
               <RadioGroup.Item
@@ -98,12 +103,14 @@ const App: React.FC = () => {
         </Flex>
         <Flex gap="2" direction="column">
         <Label style={secondaryTextStyle}>Options</Label>
-          {
-            format ==='csv' && 
+        {
+          format === 'csv' && (
             <Flex gap="2">
-              <Switch id="varvar-export-row-column-pos" onCheckedChange={setUseRowColumnPos} checked={useRowColumnPos} /> <Label htmlFor="varvar-export-row-column-pos">Use row &amp; column positions (i.e.: <code>=E7</code>) for linked vars</Label>
+              <Switch id="varvar-export-row-column-pos" onCheckedChange={setUseRowColumnPos} checked={useRowColumnPos} />
+              <Label htmlFor="varvar-export-row-column-pos">Use row &amp; column positions (i.e.: <code>=E7</code>) for linked vars</Label>
             </Flex>
-          }
+          )
+        }
           <Flex gap="2">
             <Switch id="varvar-preview-output" onCheckedChange={setSeeOutput} checked={seeOutput} /> <Label htmlFor="varvar-preview-output">Preview output</Label>
           </Flex>
