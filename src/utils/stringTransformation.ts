@@ -10,10 +10,10 @@ export const toCssVar = (string: string, prependDoubleDash: boolean = false) => 
 export const toCamelCase = (string: string) => {
     return string
         .trim()
-        .replace(/(?:^\w|[A-Z]|\b\w|\s+\w|\d+)/g, (match, index) => {
+        .replace(/(?:^\w|[A-Z]|\b\w|\s+\w|\s*\d+)/g, (match, index) => {
             if (index === 0) return match.toLowerCase();
             if (/^\s+\w/.test(match)) return match.trim().toUpperCase();
-            if (/^\d+$/.test(match)) return match;
+            if (/\s*\d+/.test(match)) return match.trim();
             return match.toUpperCase();
         })
         .replace(/-/g, '')
