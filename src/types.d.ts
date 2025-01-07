@@ -57,3 +57,10 @@ export type CssColor =
   | CssHSLA
   | CssVAR
   | CssGlobalValues;
+
+  export type OutputFormats =
+  | "csv"
+  | "json"
+  | "css"
+  | "js"
+  | "ts"
