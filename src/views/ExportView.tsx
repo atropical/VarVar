@@ -123,6 +123,7 @@ export const ExportView: React.FC = () => {
     const preview = seeOutput && exportedData ? (
         <OutputPreview 
             exportedData={exportedData}
+            editorType={editorType}
             onSelectToCopy={handleSelectToCopy}
         />
     ) : null;
