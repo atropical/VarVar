@@ -1,10 +1,15 @@
 import { rgbToCssColor } from "./color";
 import { toCssVar } from "./stringTransformation";
 
+/**
+ * Processes a variable collection into CSS format
+ * @param collection - The variable collection to process
+ * @returns Object containing root variables and theme-specific CSS blocks
+ */
 async function processCollection({
-  name,
-  modes,
-  variableIds,
+    name,
+    modes,
+    variableIds,
 }: VariableCollection): Promise<{ root: string[], theme: string[] }> {
   const collection: string[] = [];
   let rootVars: string[] = [];
@@ -65,7 +70,11 @@ async function processCollection({
   return { root: rootVars, theme: collection };
 }
 
-export const exportToCSS = async () => {
+/**
+ * Exports all local variable collections to CSS format
+ * @returns CSS string with custom properties and theme selectors
+ */
+export const exportToCSS = async (): Promise<string> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   try {
     const rootVars = new Set<string>();  // Use Set to avoid duplicates

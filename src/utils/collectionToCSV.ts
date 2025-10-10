@@ -1,8 +1,28 @@
 import { rgbToCssColor } from "./color";
 
-type VariablePosition = { row: number, column: string, collection: string; mode: string, var: VariableValue }
+/**
+ * Represents the position and metadata of a variable in CSV format
+ */
+type VariablePosition = { 
+    row: number; 
+    column: string; 
+    collection: string; 
+    mode: string; 
+    var: VariableValue;
+}
 
-const processCollectionToCSV = async ({ name, modes, variableIds }: VariableCollection, lastCollectionRowIndex?:number, collectionsVariablesMap?:Map<string, VariablePosition>): Promise<string[]> => {
+/**
+ * Processes a variable collection into CSV rows
+ * @param collection - The variable collection to process
+ * @param lastCollectionRowIndex - Optional row index for positioning
+ * @param collectionsVariablesMap - Optional map for tracking variable positions
+ * @returns Array of CSV row strings
+ */
+const processCollectionToCSV = async (
+    { name, modes, variableIds }: VariableCollection, 
+    lastCollectionRowIndex?: number, 
+    collectionsVariablesMap?: Map<string, VariablePosition>
+): Promise<string[]> => {
   const csvRows: string[] = [];
   const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
   let rowIndex = lastCollectionRowIndex;
@@ -67,7 +87,12 @@ const processCollectionToCSV = async ({ name, modes, variableIds }: VariableColl
   return csvRows;
 }
 
-export const exportToCSV = async (useLinkedVarRowAndColPos:boolean=false) => {
+/**
+ * Exports all local variable collections to CSV format
+ * @param useLinkedVarRowAndColPos - Whether to use row/column positioning for linked variables
+ * @returns CSV string with all variables
+ */
+export const exportToCSV = async (useLinkedVarRowAndColPos: boolean = false): Promise<string | undefined> => {
   const csvData = ["Collection,Mode,Variable,Type,Value,Scopes"];
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   let collectionsVariablesMap = new Map<string, VariablePosition>();

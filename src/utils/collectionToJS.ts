@@ -1,10 +1,15 @@
 import { rgbToCssColor } from "./color";
 import { toCamelCase } from "./stringTransformation";
 
+/**
+ * Processes a variable collection into JavaScript format
+ * @param collection - The variable collection to process
+ * @returns JavaScript export string for the collection
+ */
 async function processCollection({
-  name,
-  modes,
-  variableIds,
+    name,
+    modes,
+    variableIds,
 }: VariableCollection): Promise<string> {
   const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
   const variables: Record<string, any> = {};
@@ -69,6 +74,10 @@ async function processCollection({
     })};\n`;
 }
 
+/**
+ * Exports all local variable collections to JavaScript format
+ * @returns JavaScript string with exported variable objects
+ */
 export const exportToJS = async (): Promise<string | undefined> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   try {
