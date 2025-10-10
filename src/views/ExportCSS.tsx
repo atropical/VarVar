@@ -7,6 +7,7 @@ import { FilenameInput } from "../components/FilenameInput";
 import { ExportOptions } from "../components/ExportOptions";
 import { ExportButton } from "../components/ExportButton";
 import { OutputPreview } from "../components/OutputPreview";
+import { ExportLayout } from "../components/ExportLayout";
 
 /**
  * CSS-specific export view
@@ -17,6 +18,7 @@ export const ExportCSS: React.FC = () => {
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [exportedData, setExportedData] = useState<string>("");
     const [variablesCount, setVariablesCount] = useState<number>(0);
+    const [editorType, setEditorType] = useState<string>("");
 
     const handleExport = () => {
         parent.postMessage({ 
@@ -44,6 +46,7 @@ export const ExportCSS: React.FC = () => {
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === "INFO.BASIC_INFO") {
                 setVariablesCount(pluginMessage.count);
+                setEditorType(pluginMessage.editorType || "");
                 const defaultFilename = `${pluginMessage.filename}_variables`;
                 setFilename(defaultFilename);
             } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {
@@ -67,8 +70,8 @@ export const ExportCSS: React.FC = () => {
         }
     }, [variablesCount]);
 
-    return (
-        <PluginDialogShell>
+    const formControls = (
+        <>
             <ExportHeader format={format} />
 
             <ExportOptions
@@ -89,13 +92,23 @@ export const ExportCSS: React.FC = () => {
                 variablesCount={variablesCount}
                 onExport={handleExport}
             />
+        </>
+    );
 
-            {seeOutput && exportedData && (
-                <OutputPreview 
-                    exportedData={exportedData}
-                    onSelectToCopy={handleSelectToCopy}
-                />
-            )}
+    const preview = seeOutput && exportedData ? (
+        <OutputPreview 
+            exportedData={exportedData}
+            onSelectToCopy={handleSelectToCopy}
+        />
+    ) : null;
+
+    return (
+        <PluginDialogShell>
+            <ExportLayout 
+                editorType={editorType}
+                children={formControls}
+                preview={preview}
+            />
         </PluginDialogShell>
     );
 };

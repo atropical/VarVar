@@ -7,6 +7,7 @@ import { FilenameInput } from "../components/FilenameInput";
 import { ExportOptions } from "../components/ExportOptions";
 import { ExportButton } from "../components/ExportButton";
 import { OutputPreview } from "../components/OutputPreview";
+import { ExportLayout } from "../components/ExportLayout";
 
 /**
  * Generic export view with format selector (default command)
@@ -18,6 +19,7 @@ export const ExportView: React.FC = () => {
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(false);
     const [exportedData, setExportedData] = useState<string>("");
     const [variablesCount, setVariablesCount] = useState<number>(0);
+    const [editorType, setEditorType] = useState<string>("");
 
     const handleExport = () => {
         parent.postMessage({ 
@@ -45,6 +47,7 @@ export const ExportView: React.FC = () => {
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === "INFO.BASIC_INFO") {
                 setVariablesCount(pluginMessage.count);
+                setEditorType(pluginMessage.editorType || "");
                 const defaultFilename = `${pluginMessage.filename}_variables`;
                 setFilename(defaultFilename);
             } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {
@@ -68,8 +71,8 @@ export const ExportView: React.FC = () => {
         }
     }, [variablesCount]);
 
-    return (
-        <PluginDialogShell>
+    const formControls = (
+        <>
             <ExportHeader format={format} />
             
             <Flex direction="column" gap="2">
@@ -114,13 +117,23 @@ export const ExportView: React.FC = () => {
                 variablesCount={variablesCount}
                 onExport={handleExport}
             />
+        </>
+    );
 
-            {seeOutput && exportedData && (
-                <OutputPreview 
-                    exportedData={exportedData}
-                    onSelectToCopy={handleSelectToCopy}
-                />
-            )}
+    const preview = seeOutput && exportedData ? (
+        <OutputPreview 
+            exportedData={exportedData}
+            onSelectToCopy={handleSelectToCopy}
+        />
+    ) : null;
+
+    return (
+        <PluginDialogShell>
+            <ExportLayout 
+                editorType={editorType}
+                children={formControls}
+                preview={preview}
+            />
         </PluginDialogShell>
     );
 };
