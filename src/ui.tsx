@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "figma-kit/styles.css";
 import { PluginCommands, MessageTypes } from "./types.d";
-import { PluginDialogShell } from "./components/PluginDialogShell";
 import { ExportView } from "./views/ExportView";
 import { ExportJSON } from "./views/ExportJSON";
 import { ExportCSV } from "./views/ExportCSV";
