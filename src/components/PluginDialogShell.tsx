@@ -19,10 +19,11 @@ export const PluginDialogShell: React.FC<PluginDialogShellProps> = ({
         <Flex 
             direction="column" 
             gap="4"
+            justify="between"
             style={{
-                padding: "8px",
-                minHeight: "100vh",
-                boxSizing: "border-box"
+                padding: "1rem",
+                boxSizing: "border-box",
+                minHeight: "100%",
             }}
         >
             {children}
