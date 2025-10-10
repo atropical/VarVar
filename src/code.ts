@@ -6,7 +6,7 @@ import { exportToCSS } from "./utils/collectionToCSS";
 import { exportToJS } from "./utils/collectionToJS";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage } from "./types.d";
 
-figma.showUI(__html__, { width: 600, height: 500, themeColors: true });
+figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
 
 /**
  * Handle plugin menu commands
@@ -17,7 +17,8 @@ figma.on('run', ({ command }) => {
         type: MessageTypes.BASIC_INFO,
         command: command as PluginCommands,
         count: 0,
-        filename: figma.root.name
+        filename: figma.root.name,
+        editorType: figma.editorType
     } as PluginMessage);
 });
 
@@ -32,7 +33,8 @@ async function handleBasicInfo(command?: PluginCommands) {
         type: MessageTypes.BASIC_INFO,
         command,
         count: vars.length,
-        filename
+        filename,
+        editorType: figma.editorType
     } as PluginMessage);
 }
 
