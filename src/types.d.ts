@@ -58,9 +58,52 @@ export type CssColor =
   | CssVAR
   | CssGlobalValues;
 
-  export type OutputFormats =
-  | "csv"
-  | "json"
-  | "css"
-  | "js"
-  | "ts"
+/**
+ * Supported export formats for Figma variables
+ */
+export enum OutputFormats {
+  CSV = "csv",
+  JSON = "json", 
+  CSS = "css",
+  JS = "js",
+  TS = "ts"
+}
+
+/**
+ * Plugin command types for menu actions
+ */
+export enum PluginCommands {
+  EXPORT_GENERIC = "export",
+  EXPORT_JSON = "export-json",
+  EXPORT_CSV = "export-csv", 
+  EXPORT_CSS = "export-css",
+  EXPORT_JS = "export-js"
+}
+
+/**
+ * Message types for plugin communication
+ */
+export enum MessageTypes {
+  // Info messages
+  GET_BASIC_INFO = "INFO.GET_BASIC_INFO",
+  BASIC_INFO = "INFO.BASIC_INFO",
+  
+  // Export messages
+  EXPORT_SUCCESS = "EXPORT.SUCCESS",
+  EXPORT_SUCCESS_RESULT = "EXPORT.SUCCESS.RESULT",
+  EXPORT_ERROR = "EXPORT.ERROR"
+}
+
+/**
+ * Plugin message interface for communication between UI and plugin code
+ */
+export interface PluginMessage {
+  type: MessageTypes;
+  command?: PluginCommands;
+  format?: OutputFormats;
+  useLinkedVarRowAndColPos?: boolean;
+  count?: number;
+  filename?: string;
+  data?: string;
+  error?: string;
+}
