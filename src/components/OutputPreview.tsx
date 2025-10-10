@@ -4,6 +4,7 @@ import { copyToClipboard } from "../utils/clipboard";
 
 interface OutputPreviewProps {
     exportedData: string;
+    editorType?: string;
     onSelectToCopy: () => void;
 }
 
@@ -12,6 +13,7 @@ interface OutputPreviewProps {
  */
 export const OutputPreview: React.FC<OutputPreviewProps> = ({ 
     exportedData, 
+    editorType = 'dev',
     onSelectToCopy 
 }) => {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -33,7 +35,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     if (!exportedData) return null;
 
     return (
-        <Flex direction="column" gap="2">
+        <Flex direction="column" gap="2" style={{ flex: "1 1 auto", maxWidth: editorType === 'design' ? "454px" : undefined }}>
             <Text>Code Preview</Text>
             <Flex 
                 direction="column"
@@ -76,7 +78,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                     <Text style={{ marginTop: '-2rem' }}>
                         <pre
                             id="varvar-exported-output"
-                            style={{ overflowX: 'auto' }}
+                            style={{ overflow: 'auto' }}
                             contentEditable
                             spellCheck="false"
                         >
