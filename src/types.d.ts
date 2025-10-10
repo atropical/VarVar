@@ -106,4 +106,5 @@ export interface PluginMessage {
   filename?: string;
   data?: string;
   error?: string;
+  editorType?: string;
 }
