@@ -46,14 +46,7 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
                 </Flex>
                 
                 {/* Preview on the right - takes remaining space and full height */}
-                <Flex 
-                    direction="column"
-                    style={{
-                        flex: "1 1 auto",
-                    }}
-                >
-                    {preview}
-                </Flex>
+                {preview}
             </Flex>
         );
     }
