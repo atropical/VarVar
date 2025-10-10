@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Flex } from "figma-kit";
 import { OutputFormats } from "../types.d";
 import { PluginDialogShell } from "../components/PluginDialogShell";
 import { ExportHeader } from "../components/ExportHeader";
