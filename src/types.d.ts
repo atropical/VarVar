@@ -102,6 +102,7 @@ export interface PluginMessage {
   command?: PluginCommands;
   format?: OutputFormats;
   useLinkedVarRowAndColPos?: boolean;
+  useTailwindFormat?: boolean;
   count?: number;
   filename?: string;
   data?: string;
