@@ -1,0 +1,116 @@
+import { useState, useEffect } from "react";
+import { OutputFormats } from "../types.d";
+
+interface UseExportDataProps {
+    format: OutputFormats;
+    useRowColumnPos?: boolean;
+}
+
+interface UseExportDataReturn {
+    filename: string;
+    setFilename: (filename: string) => void;
+    seeOutput: boolean;
+    setSeeOutput: (seeOutput: boolean) => void;
+    useRowColumnPos: boolean;
+    setUseRowColumnPos: (useRowColumnPos: boolean) => void;
+    exportedData: string;
+    setExportedData: (data: string) => void;
+    variablesCount: number;
+    handleExport: () => void;
+    handleSelectToCopy: () => void;
+    handleDownload: () => void;
+}
+
+/**
+ * Custom hook that consolidates shared export logic across all export views
+ * @param format - The format of the exported data
+ * @param useRowColumnPos - Whether to use row and column positions for linked variables
+ * @returns An object containing the filename, seeOutput, useRowColumnPos, exportedData, variablesCount, handleExport, handleSelectToCopy, and handleDownload
+ */
+export const useExportData = ({ 
+    format, 
+    useRowColumnPos: initialUseRowColumnPos = false 
+}: UseExportDataProps): UseExportDataReturn => {
+    const [filename, setFilename] = useState<string>("exported_variables");
+    const [seeOutput, setSeeOutput] = useState<boolean>(true);
+    const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
+    const [exportedData, setExportedData] = useState<string>("");
+    const [variablesCount, setVariablesCount] = useState<number>(0);
+
+    const handleExport = () => {
+        parent.postMessage({ 
+            pluginMessage: { 
+                type: "EXPORT.SUCCESS" as any, 
+                format, 
+                useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false
+            } 
+        }, "*");
+    };
+
+    const handleSelectToCopy = () => {
+        if (exportedData) {
+            const textArea = document.querySelector('#varvar-exported-output');
+            const selection = document.getSelection();
+            if (textArea && selection) {
+                selection.selectAllChildren(textArea);
+            } else {
+                console.warn('Unable to select all code.');
+            }
+        }
+    };
+
+    const downloadFile = (data: string, fileFormat: string, fileName: string) => {
+        const blob = new Blob([data], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${fileName}.${fileFormat}`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDownload = () => {
+        if (exportedData) {
+            downloadFile(exportedData, format, filename);
+        }
+    };
+
+    useEffect(() => {
+        window.onmessage = ({ data: { pluginMessage } }) => {
+            if (pluginMessage.type === "INFO.BASIC_INFO") {
+                setVariablesCount(pluginMessage.count);
+                const defaultFilename = `${pluginMessage.filename}_variables`;
+                setFilename(defaultFilename);
+            } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {
+                setExportedData(pluginMessage.data);
+
+                // Only auto-download if preview is disabled
+                if (!seeOutput) {
+                    downloadFile(pluginMessage.data, pluginMessage.format, filename);
+                }
+            }
+        };
+    }, [filename, format, seeOutput]);
+
+    // Request basic info on mount (only if not already received)
+    useEffect(() => {
+        if (variablesCount === 0) {
+            parent.postMessage({ pluginMessage: { type: "INFO.GET_BASIC_INFO" as any } }, "*");
+        }
+    }, [variablesCount]);
+
+    return {
+        filename,
+        setFilename,
+        seeOutput,
+        setSeeOutput,
+        useRowColumnPos,
+        setUseRowColumnPos,
+        exportedData,
+        setExportedData,
+        variablesCount,
+        handleExport,
+        handleSelectToCopy,
+        handleDownload
+    };
+};
