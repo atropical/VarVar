@@ -35,7 +35,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     if (!exportedData) return null;
 
     return (
-        <Flex direction="column" gap="2" style={{ flex: "1 1 auto", maxWidth: editorType === 'design' ? "454px" : undefined }}>
+        <Flex direction="column" gap="2" style={{ flex: "2 0 300px", maxWidth: editorType === 'design' ? "454px" : undefined }}>
             <Text>Code Preview</Text>
             <Flex 
                 direction="column"
