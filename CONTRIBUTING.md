@@ -182,7 +182,7 @@ Add screenshots here
 
 Before submitting a PR, test the following:
 
-1. **All export formats**: JSON, CSV, CSS, JavaScript
+1. **All export formats**: JSON, CSV, CSS, JavaScript, Tailwind CSS
 2. **Menu commands**: Each format-specific menu item
 3. **Linked variables**: Ensure proper handling across formats
 4. **Error handling**: Test with edge cases and invalid data
@@ -234,6 +234,8 @@ To add a new export format:
 4. **Update router**: Add case to the switch statement in `ui.tsx`
 5. **Update manifest**: Add menu item in `figma.manifest.ts`
 6. **Update documentation**: Add to README and this file
+
+**Note**: Tailwind CSS export is currently available as a CSS format option (toggle in ExportOptions) but not as a separate menu command.
 
 ## Reporting Issues
 

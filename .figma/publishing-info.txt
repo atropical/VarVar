@@ -1,11 +1,11 @@
 TAGLINE:
-Export Figma Variables to JSON, JS, CSV and CSS with format-specific menu commands.
+Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS with format-specific menu commands.
 
 DESCRIPTION:
-VarVar is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, or CSS formats, making it easier to integrate your design tokens into your development workflow. Now with format-specific menu commands for faster exports!
+VarVar is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. Now with format-specific menu commands for faster exports!
 
 Features
-• Multiple Export Formats: JSON, JavaScript, CSV, and CSS
+• Multiple Export Formats: JSON, JavaScript, CSV, CSS, and Tailwind CSS
 • Format-Specific Menu Commands: Direct access to each export format from the Figma menu
 • Linked Variable Support: Properly handles linked variables across all formats
 • Preview & Copy: Preview exported data and easily copy to clipboard
@@ -17,6 +17,7 @@ Linked Variable Handling
 • JavaScript: Linked variables are referenced directly like collection.mode.variable
 • CSV: Linked variables start with =VARIABLE/PATH (with optional row/column positioning)
 • CSS: Linked variables use CSS custom property syntax: --var-name: var(--VARIABLE)
+• Tailwind CSS: Linked variables use CSS custom property syntax with Tailwind naming conventions
 
 Usage
 
@@ -43,6 +44,7 @@ Access format-specific exports directly from the Figma menu:
    • Export as JavaScript - JavaScript objects with proper references
    • Export as CSV - Spreadsheet-compatible data
    • Export as CSS - CSS custom properties for web development
+   • Export as Tailwind CSS - Tailwind CSS v4+ format with @theme directive (BETA)
 3. Configure filename and options (if applicable)
 4. Click "Export Variables"
 5. The exported file will be automatically downloaded
@@ -66,4 +68,4 @@ For bug reports, suggestions, or questions, please open an issue.
 
 
 TAGS:
-variables, export variables, variables to json, variables to javascript, variables to csv, variables to css, developer, tokens, export, json, csv, css, design tokens, figma variables, menu commands, quick export
+variables, export variables, variables to json, variables to javascript, variables to csv, variables to css, variables to tailwind, tailwind css, developer, tokens, export, json, csv, css, design tokens, figma variables, menu commands, quick export

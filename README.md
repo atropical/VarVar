@@ -4,7 +4,7 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 
 ## Features
 
-- **Multiple Export Formats**: Export Figma variables to JSON, CSV, CSS, or JavaScript
+- **Multiple Export Formats**: Export Figma variables to JSON, CSV, CSS (vanilla or Tailwind CSS v4), or JavaScript
 - **Format-Specific Menu Commands**: Direct access to each export format from the Figma menu
 - **Linked Variable Support**: Identifies and properly handles linked variables across formats
 - **Preview & Copy**: Preview exported data and easily copy to clipboard
@@ -19,6 +19,7 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 - **CSV**: Linked variables start with `=VARIABLE/PATH`
   - **Option:** Use row & column positions to produce formula-like linking (i.e. `=E7`) in spreadsheet programs
 - **CSS**: Linked variables use CSS custom property syntax: `--var-name: var(--VARIABLE)`
+- **Tailwind CSS**: Linked variables use CSS custom property syntax with Tailwind naming conventions
 
 > **Note:** When dealing with linked variables that have multiple modes, the plugin will only link to the first occurrence (i.e., the first mode).
 
@@ -40,6 +41,7 @@ Access format-specific exports directly from the Figma menu:
    - **Export as JavaScript** - JavaScript objects with proper references
    - **Export as CSV** - Spreadsheet-compatible data
    - **Export as CSS** - CSS custom properties for web development
+     - *Tailwind CSS or vanilla* - Tailwind CSS format with `@theme` directive (BETA)
 3. Configure filename and options (if applicable)
 4. Click "Export Variables"
 5. The exported file will be automatically downloaded
@@ -99,6 +101,7 @@ src/
 │   ├── collectionToCSV.ts
 │   ├── collectionToCSS.ts
 │   ├── collectionToJS.ts
+│   ├── collectionToTailwind.ts
 │   ├── clipboard.ts
 │   ├── color.ts
 │   └── stringTransformation.ts
