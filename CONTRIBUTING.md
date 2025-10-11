@@ -131,7 +131,7 @@ Format-specific views should:
 
 1. **Test your changes**: Ensure the plugin builds and works correctly
    ```bash
-   npm run test  # Runs TypeScript check and build
+   npm run test  # Runs TypeScript check and build (no unit tests)
    ```
 
 2. **Follow code style**: Use the established patterns and conventions

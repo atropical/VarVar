@@ -80,11 +80,14 @@ src/
 ├── components/          # Reusable UI components
 │   ├── PluginDialogShell.tsx  # Layout shell with padding and footer
 │   ├── ExportHeader.tsx
+│   ├── ExportLayout.tsx
 │   ├── FilenameInput.tsx
 │   ├── ExportButton.tsx
 │   ├── OutputPreview.tsx
 │   ├── ExportOptions.tsx
 │   └── Footer.tsx
+├── hooks/              # Custom React hooks
+│   └── useExportData.ts    # Hook for managing export data and state
 ├── views/              # Format-specific export views
 │   ├── ExportView.tsx      # Generic export with format selector
 │   ├── ExportJSON.tsx
@@ -96,6 +99,7 @@ src/
 │   ├── collectionToCSV.ts
 │   ├── collectionToCSS.ts
 │   ├── collectionToJS.ts
+│   ├── clipboard.ts
 │   ├── color.ts
 │   └── stringTransformation.ts
 ├── types.d.ts          # TypeScript definitions and enums
