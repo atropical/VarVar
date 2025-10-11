@@ -13,13 +13,14 @@ import { ExportJS } from "./views/ExportJS";
  */
 const App: React.FC = () => {
     const [command, setCommand] = useState<PluginCommands>(PluginCommands.EXPORT_GENERIC);
+    const [editorType, setEditorType] = useState<string>("");
 
     useEffect(() => {
         // Listen for command from plugin code
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === MessageTypes.BASIC_INFO && pluginMessage.command) {
-                console.log('Received command:', pluginMessage.command);
                 setCommand(pluginMessage.command);
+                setEditorType(pluginMessage.editorType || "");
             }
         };
     }, []);
@@ -27,16 +28,16 @@ const App: React.FC = () => {
     // Render appropriate view based on command
     switch (command) {
         case PluginCommands.EXPORT_JSON:
-            return <ExportJSON />;
+            return <ExportJSON editorType={editorType} />;
         case PluginCommands.EXPORT_CSV:
-            return <ExportCSV />;
+            return <ExportCSV editorType={editorType} />;
         case PluginCommands.EXPORT_CSS:
-            return <ExportCSS />;
+            return <ExportCSS editorType={editorType} />;
         case PluginCommands.EXPORT_JS:
-            return <ExportJS />;
+            return <ExportJS editorType={editorType} />;
         case PluginCommands.EXPORT_GENERIC:
         default:
-            return <ExportView />;
+            return <ExportView editorType={editorType} />;
     }
 };
 

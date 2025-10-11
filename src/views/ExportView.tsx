@@ -9,17 +9,20 @@ import { ExportButton } from "../components/ExportButton";
 import { OutputPreview } from "../components/OutputPreview";
 import { ExportLayout } from "../components/ExportLayout";
 
+interface ExportViewProps {
+    editorType?: string;
+}
+
 /**
  * Generic export view with format selector (default command)
  */
-export const ExportView: React.FC = () => {
+export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
     const [format, setFormat] = useState<OutputFormats>(OutputFormats.JSON);
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(false);
     const [exportedData, setExportedData] = useState<string>("");
     const [variablesCount, setVariablesCount] = useState<number>(0);
-    const [editorType, setEditorType] = useState<string>("");
 
     const handleExport = () => {
         parent.postMessage({ 
@@ -47,7 +50,6 @@ export const ExportView: React.FC = () => {
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === "INFO.BASIC_INFO") {
                 setVariablesCount(pluginMessage.count);
-                setEditorType(pluginMessage.editorType || "");
                 const defaultFilename = `${pluginMessage.filename}_variables`;
                 setFilename(defaultFilename);
             } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {

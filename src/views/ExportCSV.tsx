@@ -9,17 +9,20 @@ import { ExportButton } from "../components/ExportButton";
 import { OutputPreview } from "../components/OutputPreview";
 import { ExportLayout } from "../components/ExportLayout";
 
+interface ExportCSVProps {
+    editorType?: string;
+}
+
 /**
  * CSV-specific export view with row/column positioning option
  */
-export const ExportCSV: React.FC = () => {
+export const ExportCSV: React.FC<ExportCSVProps> = ({ editorType = "" }) => {
     const format = OutputFormats.CSV;
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(false);
     const [exportedData, setExportedData] = useState<string>("");
     const [variablesCount, setVariablesCount] = useState<number>(0);
-    const [editorType, setEditorType] = useState<string>("");
 
     const handleExport = () => {
         parent.postMessage({ 
@@ -47,7 +50,6 @@ export const ExportCSV: React.FC = () => {
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === "INFO.BASIC_INFO") {
                 setVariablesCount(pluginMessage.count);
-                setEditorType(pluginMessage.editorType || "");
                 const defaultFilename = `${pluginMessage.filename}_variables`;
                 setFilename(defaultFilename);
             } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {

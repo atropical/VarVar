@@ -18,7 +18,7 @@ figma.on('run', ({ command }) => {
         command: command as PluginCommands,
         count: 0,
         filename: figma.root.name,
-        editorType: figma.editorType
+        editorType: figma.editorType || 'figma' // fallback to 'figma' if undefined
     } as PluginMessage);
 });
 
@@ -34,7 +34,7 @@ async function handleBasicInfo(command?: PluginCommands) {
         command,
         count: vars.length,
         filename,
-        editorType: figma.editorType
+        editorType: figma.editorType || 'figma' // fallback to 'figma' if undefined
     } as PluginMessage);
 }
 
