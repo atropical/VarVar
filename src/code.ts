@@ -3,6 +3,7 @@
 import { exportToCSV } from "./utils/collectionToCSV";
 import { exportToJSON } from "./utils/collectionToJSON";
 import { exportToCSS } from "./utils/collectionToCSS";
+import { exportToTailwind } from "./utils/collectionToTailwind";
 import { exportToJS } from "./utils/collectionToJS";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage } from "./types.d";
 
@@ -41,7 +42,7 @@ async function handleBasicInfo(command?: PluginCommands) {
 /**
  * Handles export requests with format-specific logic
  */
-async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false) {
+async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false) {
     try {
         let data: string;
         
@@ -56,7 +57,7 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
                 data = await exportToJS() || '';
                 break;
             case OutputFormats.CSS:
-                data = await exportToCSS();
+                data = useTailwindFormat ? await exportToTailwind() : await exportToCSS();
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
@@ -93,7 +94,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             
         case MessageTypes.EXPORT_SUCCESS:
             if (msg.format) {
-                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false);
+                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false);
             } else {
                 console.error('Export request missing format');
             }
