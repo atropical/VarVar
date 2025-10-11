@@ -23,6 +23,8 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
         setFilename,
         seeOutput,
         setSeeOutput,
+        useTailwindFormat,
+        setUseTailwindFormat,
         exportedData,
         variablesCount,
         handleExport,
@@ -38,8 +40,10 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
                 format={format}
                 seeOutput={seeOutput}
                 useRowColumnPos={false}
+                useTailwindFormat={useTailwindFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
+                onUseTailwindFormatChange={setUseTailwindFormat}
             />
 
             <FilenameInput 

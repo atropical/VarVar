@@ -4,6 +4,7 @@ import { OutputFormats } from "../types.d";
 interface UseExportDataProps {
     format: OutputFormats;
     useRowColumnPos?: boolean;
+    useTailwindFormat?: boolean;
 }
 
 interface UseExportDataReturn {
@@ -13,6 +14,8 @@ interface UseExportDataReturn {
     setSeeOutput: (seeOutput: boolean) => void;
     useRowColumnPos: boolean;
     setUseRowColumnPos: (useRowColumnPos: boolean) => void;
+    useTailwindFormat: boolean;
+    setUseTailwindFormat: (useTailwindFormat: boolean) => void;
     exportedData: string;
     setExportedData: (data: string) => void;
     variablesCount: number;
@@ -29,11 +32,13 @@ interface UseExportDataReturn {
  */
 export const useExportData = ({ 
     format, 
-    useRowColumnPos: initialUseRowColumnPos = false 
+    useRowColumnPos: initialUseRowColumnPos = false,
+    useTailwindFormat: initialUseTailwindFormat = false
 }: UseExportDataProps): UseExportDataReturn => {
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
+    const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
     const [exportedData, setExportedData] = useState<string>("");
     const [variablesCount, setVariablesCount] = useState<number>(0);
 
@@ -42,7 +47,8 @@ export const useExportData = ({
             pluginMessage: { 
                 type: "EXPORT.SUCCESS" as any, 
                 format, 
-                useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false
+                useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
+                useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false
             } 
         }, "*");
     };
@@ -92,6 +98,21 @@ export const useExportData = ({
         };
     }, [filename, format, seeOutput]);
 
+    // Re-export when Tailwind format changes (for CSS format only)
+    useEffect(() => {
+        if (format === OutputFormats.CSS && exportedData) {
+            // Trigger re-export when Tailwind format toggle changes
+            parent.postMessage({ 
+                pluginMessage: { 
+                    type: "EXPORT.SUCCESS" as any, 
+                    format, 
+                    useLinkedVarRowAndColPos: false,
+                    useTailwindFormat: useTailwindFormat
+                } 
+            }, "*");
+        }
+    }, [useTailwindFormat, format]);
+
     // Request basic info on mount (only if not already received)
     useEffect(() => {
         if (variablesCount === 0) {
@@ -106,6 +127,8 @@ export const useExportData = ({
         setSeeOutput,
         useRowColumnPos,
         setUseRowColumnPos,
+        useTailwindFormat,
+        setUseTailwindFormat,
         exportedData,
         setExportedData,
         variablesCount,

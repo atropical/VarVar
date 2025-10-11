@@ -26,6 +26,8 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         setSeeOutput,
         useRowColumnPos,
         setUseRowColumnPos,
+        useTailwindFormat,
+        setUseTailwindFormat,
         exportedData,
         setExportedData,
         variablesCount,
@@ -38,6 +40,13 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
     useEffect(() => {
         if (format !== OutputFormats.CSV) {
             setUseRowColumnPos(false);
+        }
+    }, [format]);
+
+    // Reset useTailwindFormat when format changes to non-CSS
+    useEffect(() => {
+        if (format !== OutputFormats.CSS) {
+            setUseTailwindFormat(false);
         }
     }, [format]);
 
@@ -78,8 +87,10 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                 format={format}
                 seeOutput={seeOutput}
                 useRowColumnPos={useRowColumnPos}
+                useTailwindFormat={useTailwindFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={setUseRowColumnPos}
+                onUseTailwindFormatChange={setUseTailwindFormat}
             />
 
             <FilenameInput 
