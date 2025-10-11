@@ -26,7 +26,7 @@ export const ExportView: React.FC = () => {
             pluginMessage: { 
                 type: "EXPORT.SUCCESS" as any, 
                 format, 
-                useLinkedVarRowAndColPos: useRowColumnPos 
+                useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false
             } 
         }, "*");
     };
@@ -70,6 +70,13 @@ export const ExportView: React.FC = () => {
             parent.postMessage({ pluginMessage: { type: "INFO.GET_BASIC_INFO" as any } }, "*");
         }
     }, [variablesCount]);
+
+    // Reset useRowColumnPos when format changes to non-CSV
+    useEffect(() => {
+        if (format !== OutputFormats.CSV) {
+            setUseRowColumnPos(false);
+        }
+    }, [format]);
 
     const formControls = (
         <>
