@@ -1,3 +1,9 @@
+/**
+ * Converts a string to a CSS variable name
+ * @param {string} string - The string to convert
+ * @param {boolean} prependDoubleDash - Whether to prepend a double dash
+ * @returns {string} The CSS variable name
+ */
 export const toCssVar = (string: string, prependDoubleDash: boolean = false) => {
     string = (prependDoubleDash ? `--${string}` : string)
                 .replace(/\//g, "--")
@@ -7,6 +13,12 @@ export const toCssVar = (string: string, prependDoubleDash: boolean = false) => 
     return string;
 }
 
+/**
+ * Converts a string to camel case
+ * @param {string} string - The string to convert
+ * @param {boolean} detectAllCaps - Whether to detect all caps
+ * @returns {string} The camel case string
+ */
 export const toCamelCase = (string: string, detectAllCaps = true) => {
 
     if (detectAllCaps && /^[A-Z][A-Z0-9_\s]*$/.test(string)) {

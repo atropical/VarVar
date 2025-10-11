@@ -1,9 +1,14 @@
 import { rgbToCssColor } from "./color";
 
+/**
+ * Processes a variable collection into JSON format
+ * @param collection - The variable collection to process
+ * @returns Array of JSON objects representing the collection
+ */
 async function processCollection({
-  name,
-  modes,
-  variableIds,
+    name,
+    modes,
+    variableIds,
 }: VariableCollection): Promise<[]> {
   const collection: [] = [];
   const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -62,7 +67,11 @@ async function processCollection({
   return collection;
 }
 
-export const exportToJSON = async () => {
+/**
+ * Exports all local variable collections to JSON format
+ * @returns JSON string with structured variable data
+ */
+export const exportToJSON = async (): Promise<string | undefined> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   try {
     const files: any[] = [];

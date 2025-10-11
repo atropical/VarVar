@@ -1,43 +1,71 @@
 TAGLINE:
-Export Figma Variables to JSON, JS, CSV and CSS.
+Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS with format-specific menu commands.
 
 DESCRIPTION:
-VarVar is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV or CSS formats, making it easier to integrate your design tokens into your development workflow.
+VarVar is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. Now with format-specific menu commands for faster exports!
 
 Features
-Export Figma variables to JSON, JS, CSV or CSS formats
-Identifies linked variables
-JSON: linked variables start with $.VARIABLE.PATH
-JS: linked variables start with VARIABLE.PATH (without quotes)
-CSV: linked variables start with =VARIABLE/PATH
-CSS: linked variables will call CSS function var(--VARIABLE)
-Preview exported data within the plugin interface
-Automatically download exported files
+• Multiple Export Formats: JSON, JavaScript, CSV, CSS, and Tailwind CSS
+• Format-Specific Menu Commands: Direct access to each export format from the Figma menu
+• Linked Variable Support: Properly handles linked variables across all formats
+• Preview & Copy: Preview exported data and easily copy to clipboard
+• Automatic Downloads: Exported files are automatically downloaded
+• Row/Column Positioning: CSV option for spreadsheet formula-like linking
+
+Linked Variable Handling
+• JSON: Linked variables start with $.VARIABLE.PATH
+• JavaScript: Linked variables are referenced directly like collection.mode.variable
+• CSV: Linked variables start with =VARIABLE/PATH (with optional row/column positioning)
+• CSS: Linked variables use CSS custom property syntax: --var-name: var(--VARIABLE)
+• Tailwind CSS: Linked variables use CSS custom property syntax with Tailwind naming conventions
 
 Usage
+
 Design Mode
-Open your Figma file containing variables
-Run the VarVar plugin from the Plugins menu
-Choose your desired export format (JSON, JS, CSV or CSS)
-Click "Export Variables"
-The exported file will be automatically downloaded
+1. Open your Figma file containing variables
+2. Run the VarVar plugin from the Plugins menu
+3. Choose your desired export format (JSON, JS, CSV or CSS)
+4. Click "Export Variables"
+5. The exported file will be automatically downloaded
 
 Dev Mode
-Open your Figma file containing variables
-Switch to Dev Mode
-Run the VarVar plugin from the Plugins menu
-Choose your desired export format (JSON, JS, CSV or CSS)
-Click "Export Variables"
-The exported file will be automatically downloaded
+1. Open your Figma file containing variables
+2. Switch to Dev Mode (click the "Dev" tab in the right panel)
+3. Run the VarVar plugin from the Plugins menu
+4. Choose your desired export format (JSON, JS, CSV or CSS)
+5. Click "Export Variables"
+6. The exported file will be automatically downloaded
+
+Quick Export (Format-Specific)
+Access format-specific exports directly from the Figma menu:
+1. Open your Figma file containing variables
+2. Go to Plugins → VarVar → Choose your format:
+   • Export as JSON - Structured JSON data with nested groups
+   • Export as JavaScript - JavaScript objects with proper references
+   • Export as CSV - Spreadsheet-compatible data
+   • Export as CSS - CSS custom properties for web development
+   • Export as Tailwind CSS - Tailwind CSS v4+ format with @theme directive (BETA)
+3. Configure filename and options (if applicable)
+4. Click "Export Variables"
+5. The exported file will be automatically downloaded
+
+Generic Export
+For format selection within the interface:
+1. Open your Figma file containing variables
+2. Go to Plugins → VarVar → Export Variables
+3. Choose your desired export format
+4. Configure filename and options
+5. Click "Export Variables"
+6. The exported file will be automatically downloaded
 
 Preview and Copy
-Toggle the "Preview output" switch to see the exported data within the plugin interface
-Use the "Select to Copy" button and copy (Ctrl/Command + C) the exported data to your clipboard
+• Toggle the "Preview output" switch to see the exported data within the plugin interface
+• Use the "Select to Copy" button and copy (Ctrl/Command + C) the exported data to your clipboard
 
-VarVar is open source, consider contributing. Code available on GitHub.
-Bug report, suggestions, etc. Open an issue.
+VarVar is open source and developed with a modular architecture for maintainability and scalability. Consider contributing on GitHub.
+For bug reports, suggestions, or questions, please open an issue.
 
 
 
 TAGS:
-variables, export variables, variables to json, variables to table, variables to csv, variables to css, developer, tokens, export, json, csv, css
+variables, export variables, variables to json, variables to javascript, variables to csv, variables to css, variables to tailwind, tailwind css, developer, tokens, export, json, csv, css, design tokens, figma variables, menu commands, quick export
