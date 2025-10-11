@@ -8,6 +8,7 @@ import { ExportOptions } from "../components/ExportOptions";
 import { ExportButton } from "../components/ExportButton";
 import { OutputPreview } from "../components/OutputPreview";
 import { ExportLayout } from "../components/ExportLayout";
+import { useExportData } from "../hooks/useExportData";
 
 interface ExportViewProps {
     editorType?: string;
@@ -18,66 +19,31 @@ interface ExportViewProps {
  */
 export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
     const [format, setFormat] = useState<OutputFormats>(OutputFormats.JSON);
-    const [filename, setFilename] = useState<string>("exported_variables");
-    const [seeOutput, setSeeOutput] = useState<boolean>(true);
-    const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(false);
-    const [exportedData, setExportedData] = useState<string>("");
-    const [variablesCount, setVariablesCount] = useState<number>(0);
-
-    const handleExport = () => {
-        parent.postMessage({ 
-            pluginMessage: { 
-                type: "EXPORT.SUCCESS" as any, 
-                format, 
-                useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false
-            } 
-        }, "*");
-    };
-
-    const handleSelectToCopy = () => {
-        if (exportedData) {
-            const textArea = document.querySelector('#varvar-exported-output');
-            const selection = document.getSelection();
-            if (textArea && selection) {
-                selection.selectAllChildren(textArea);
-            } else {
-                console.warn('Unable to select all code.');
-            }
-        }
-    };
-
-    useEffect(() => {
-        window.onmessage = ({ data: { pluginMessage } }) => {
-            if (pluginMessage.type === "INFO.BASIC_INFO") {
-                setVariablesCount(pluginMessage.count);
-                const defaultFilename = `${pluginMessage.filename}_variables`;
-                setFilename(defaultFilename);
-            } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {
-                setExportedData(pluginMessage.data);
-
-                const blob = new Blob([pluginMessage.data], { type: "text/plain" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `${filename}.${pluginMessage.format}`;
-                link.click();
-                URL.revokeObjectURL(url);
-            }
-        };
-    }, [filename, format]);
-
-    // Request basic info on mount (only if not already received)
-    useEffect(() => {
-        if (variablesCount === 0) {
-            parent.postMessage({ pluginMessage: { type: "INFO.GET_BASIC_INFO" as any } }, "*");
-        }
-    }, [variablesCount]);
+    const {
+        filename,
+        setFilename,
+        seeOutput,
+        setSeeOutput,
+        useRowColumnPos,
+        setUseRowColumnPos,
+        exportedData,
+        setExportedData,
+        variablesCount,
+        handleExport,
+        handleSelectToCopy,
+        handleDownload
+    } = useExportData({ format, useRowColumnPos: false });
 
     // Reset useRowColumnPos when format changes to non-CSV
     useEffect(() => {
         if (format !== OutputFormats.CSV) {
             setUseRowColumnPos(false);
         }
+    }, [format]);
+
+    // Clear exported data when format changes to refresh preview
+    useEffect(() => {
+        setExportedData("");
     }, [format]);
 
     const formControls = (
@@ -88,7 +54,7 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
                     Select a format
                 </Text>
-                <RadioGroup.Root value={format} onValueChange={(value) => setFormat(value as OutputFormats)}>
+                <RadioGroup.Root orientation="vertical" value={format} onValueChange={(value) => setFormat(value as OutputFormats)}>
                     <RadioGroup.Label>
                         <RadioGroup.Item value={OutputFormats.JSON} />
                         JSON
@@ -124,7 +90,10 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
 
             <ExportButton 
                 variablesCount={variablesCount}
+                hasExportedData={!!exportedData}
+                showPreview={seeOutput}
                 onExport={handleExport}
+                onDownload={handleDownload}
             />
         </>
     );
