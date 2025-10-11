@@ -36,10 +36,10 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
                     style={{
                         flex: "0 0 300px",
                         position: "sticky",
+                        margin: "0 auto",
                         top: '1rem',
                         minWidth: "250px",
                         alignSelf: "flex-start",
-                        maxWidth: "400px"
                     }}
                 >
                     {children}
