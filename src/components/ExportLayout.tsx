@@ -34,7 +34,7 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
                     direction="column" 
                     gap="4"
                     style={{
-                        flex: "0 0 300px",
+                        flex: "1 1 200px",
                         position: "sticky",
                         margin: "0 auto",
                         top: '1rem',
