@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "figma-kit/styles.css";
-import { PluginCommands, MessageTypes } from "./types.d";
+import { PluginCommands, MessageTypes, PluginMessage } from "./types.d";
 import { ExportView } from "./views/ExportView";
 import { ExportJSON } from "./views/ExportJSON";
 import { ExportCSV } from "./views/ExportCSV";
@@ -17,11 +17,18 @@ const App: React.FC = () => {
 
     useEffect(() => {
         // Listen for command from plugin code
-        window.onmessage = ({ data: { pluginMessage } }) => {
+        const handleMessage = ({ data: { pluginMessage } }: { data: { pluginMessage: PluginMessage } }) => {
             if (pluginMessage.type === MessageTypes.BASIC_INFO && pluginMessage.command) {
                 setCommand(pluginMessage.command);
                 setEditorType(pluginMessage.editorType || "");
             }
+            // Don't prevent other messages from reaching child components
+        };
+        
+        window.addEventListener('message', handleMessage);
+        
+        return () => {
+            window.removeEventListener('message', handleMessage);
         };
     }, []);
 
