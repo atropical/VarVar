@@ -104,7 +104,7 @@ async function processCollection({
         for (const variableId of variableIds) {
             const figVar = await figma.variables.getVariableByIdAsync(variableId);
             if (figVar !== null) {
-                const { name, resolvedType, valuesByMode }: Variable = figVar;
+                const { name, resolvedType, valuesByMode, description }: Variable = figVar;
                 const value: VariableValue = valuesByMode[mode.modeId];
 
                 if (value !== undefined && validTypes.has(resolvedType)) {
@@ -135,7 +135,7 @@ async function processCollection({
                                     ? Boolean(value) ? '1' : '0'
                                     : `"${String(value)}"`;
                     }
-                    cssVars.push(`  ${tailwindVarName}: ${cssValue};`);
+                    cssVars.push(`  ${tailwindVarName}: ${cssValue};${description ? `\t/* ${description} */` : ''}`);
                 }
             } 
         }
