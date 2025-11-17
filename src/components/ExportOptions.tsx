@@ -36,7 +36,8 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                     <Switch 
                         id="varvar-export-row-column-pos" 
                         onCheckedChange={onUseRowColumnPosChange} 
-                        checked={useRowColumnPos} 
+                        checked={useRowColumnPos}
+                        style={{ flexShrink: 0 }}
                     />
                     <Label htmlFor="varvar-export-row-column-pos">
                         Use row &amp; column positions (i.e.: <code>=E7</code>) for linked vars
@@ -51,6 +52,7 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                         id="varvar-export-tailwind-format" 
                         onCheckedChange={onUseTailwindFormatChange} 
                         checked={useTailwindFormat} 
+                        style={{ flexShrink: 0 }}
                     />
                     <Label htmlFor="varvar-export-tailwind-format">
                         Export as Tailwind CSS (v4)
@@ -65,6 +67,7 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                     id="varvar-preview-output" 
                     onCheckedChange={onSeeOutputChange} 
                     checked={seeOutput} 
+                    style={{ flexShrink: 0 }}
                 />
                 <Label htmlFor="varvar-preview-output">
                     Preview output

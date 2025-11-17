@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { getMatchingModeName } from "./variableUtils";
 
 /**
  * Represents the position and metadata of a variable in CSV format
@@ -9,6 +10,7 @@ type VariablePosition = {
     collection: string; 
     mode: string; 
     var: VariableValue;
+    description: string;
 }
 
 /**
@@ -33,9 +35,9 @@ const processCollectionToCSV = async (
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
 
       if (figVar !== null) {
-        const { id, name:varName, resolvedType, valuesByMode, scopes }: Variable = figVar;
+        const { id, name:varName, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
         const varValue: VariableValue = valuesByMode[mode.modeId];
-
+        const varDescription = `"${description.replace(/"/g, '""')}"` || '';
         const isColor: boolean = resolvedType === "COLOR";
         const isNumber: boolean = resolvedType === "FLOAT";
         const isBool: boolean = resolvedType === "BOOLEAN";
@@ -49,7 +51,8 @@ const processCollectionToCSV = async (
                 column: 'E',
                 mode: mode.name,
                 row: rowIndex,
-                var: varValue
+                var: varValue,
+                description: varDescription
               })
           }
           if (typeof varValue === "object" && "id" in varValue) {
@@ -59,10 +62,13 @@ const processCollectionToCSV = async (
               ? await figma.variables.getVariableCollectionByIdAsync(linkedVar.variableCollectionId)
               : {name:''};
             
+            const matchedModeName = linkedVarCollection && 'modes' in linkedVarCollection
+              ? getMatchingModeName(mode.name, linkedVarCollection)
+              : mode.name;
             value = linkedVar ? 
             collectionsVariablesMap && rowIndex 
             ? `=${linkedVar.id}`
-            : `=${linkedVarCollection ? linkedVarCollection.name : ''}/${mode.name}/${linkedVar.name}` : "_unlinked";
+            : `=${linkedVarCollection ? linkedVarCollection.name : ''}/${matchedModeName}/${linkedVar.name}` : "_unlinked";
           }
           else {
             value = isColor
@@ -78,7 +84,7 @@ const processCollectionToCSV = async (
             };
           }
           const scopesStr = `"${scopes.toString()}"`
-          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${value},${scopesStr}`);
+          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${value},${scopesStr},${varDescription}`);
         }
       }
     }
@@ -93,7 +99,7 @@ const processCollectionToCSV = async (
  * @returns CSV string with all variables
  */
 export const exportToCSV = async (useLinkedVarRowAndColPos: boolean = false): Promise<string | undefined> => {
-  const csvData = ["Collection,Mode,Variable,Type,Value,Scopes"];
+  const csvData = ["Collection,Mode,Variable,Type,Value,Scopes,Description"];
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   let collectionsVariablesMap = new Map<string, VariablePosition>();
 

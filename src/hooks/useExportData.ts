@@ -113,6 +113,21 @@ export const useExportData = ({
         }
     }, [useTailwindFormat, format]);
 
+    // Re-export when row/column position changes (for CSV format only)
+    useEffect(() => {
+        if (format === OutputFormats.CSV && exportedData) {
+            // Trigger re-export when row/column position toggle changes
+            parent.postMessage({ 
+                pluginMessage: { 
+                    type: "EXPORT.SUCCESS" as any, 
+                    format, 
+                    useLinkedVarRowAndColPos: useRowColumnPos,
+                    useTailwindFormat: false
+                } 
+            }, "*");
+        }
+    }, [useRowColumnPos, format]);
+
     // Request basic info on mount (only if not already received)
     useEffect(() => {
         if (variablesCount === 0) {

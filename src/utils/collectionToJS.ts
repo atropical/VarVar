@@ -1,5 +1,6 @@
 import { rgbToCssColor } from "./color";
 import { toCamelCase } from "./stringTransformation";
+import { getMatchingModeName } from "./variableUtils";
 
 /**
  * Processes a variable collection into JavaScript format
@@ -16,62 +17,77 @@ async function processCollection({
 
   for (const mode of modes) {
     variables[toCamelCase(mode.name)] = {};
-    
+
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name, resolvedType, valuesByMode }: Variable = figVar;
+        const { name, resolvedType, valuesByMode, description }: Variable = figVar;
         const value: VariableValue = valuesByMode[mode.modeId];
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           let currentObj = variables[toCamelCase(mode.name)];
           const parts = name.split("/").map((str) => toCamelCase(str));
 
-          parts.forEach(async (part, i) => {
-            if (i === parts.length - 1) {
+          for (let i = 0, partsLength=parts.length; i < partsLength; i++) {
+            const part = parts[i];
+
+            if (i === partsLength - 1) {
               if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
                 const linkedVar = await figma.variables.getVariableByIdAsync(value.id);
-                
+
                 if (linkedVar) {
                   const linkedVarCollection = await figma.variables.getVariableCollectionByIdAsync(linkedVar.variableCollectionId);
-                  const collPrefix = linkedVarCollection && linkedVarCollection.name !== name ? 
+                  const collPrefix = linkedVarCollection && linkedVarCollection.name !== name ?
                     `${toCamelCase(linkedVarCollection.name)}.` : '';
-                  
-                  currentObj[part] = `${collPrefix}${toCamelCase(mode.name)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}`;
+
+                    const matchedModeName = linkedVarCollection 
+                      ? getMatchingModeName(mode.name, linkedVarCollection)
+                      : mode.name;
+                    const aliasValue = `${collPrefix}${toCamelCase(matchedModeName)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}.value`;
+                    currentObj[part] = description 
+                      ? { value: aliasValue, description }
+                      : { value: aliasValue };
                 } else {
                   currentObj[part] = '_unlinked';
                 }
               } else {
-                currentObj[part] = resolvedType === "COLOR" 
+                const processedValue = resolvedType === "COLOR"
                   ? rgbToCssColor(value as RGBA)
                   : resolvedType === "FLOAT"
                     ? parseFloat(value as string)
                     : resolvedType === "BOOLEAN"
                       ? Boolean(value)
                       : String(value);
+                
+                currentObj[part] = description
+                  ? { value: processedValue, description }
+                  : { value: processedValue };
               }
-            } else {
+            }
+            else {
               currentObj[part] = currentObj[part] || {};
               currentObj = currentObj[part];
             }
-          });
+          }
         }
       }
     }
   }
 
   const varName = toCamelCase(name);
-  return `export const ${varName} = ${JSON.stringify(variables, null, 2)
+  const output = `export const ${varName} = ${JSON.stringify(variables, null, 2)
     // First handle numeric-only keys
     .replace(/^(\s*)"(\d+)":/gm, '$1"$2":')
     // Then handle property keys
     .replace(/"([^"]+)":/g, (match, key) => {
         return /^\d+$/.test(key) ? match : `${key}:`
     })
-    // Handle linked variable references
-    .replace(/"([$_a-zA-Z][$_a-zA-Z0-9]*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*(?:\.\d+)*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*)"/g, (match, p1) => {
-        return p1.replace(/\.(\d+)(?=\.|$)/g, '["$1"]');
+    // Handle linked variable references in value field
+    .replace(/"value":\s*"([$_a-zA-Z][$_a-zA-Z0-9]*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*(?:\.\d+)*(?:\.[$_a-zA-Z][$_a-zA-Z0-9]*)*)"/g, (match, p1) => {
+        return `value: ${p1.replace(/\.(\d+)(?=\.|$)/g, '["$1"]')}`;
     })};\n`;
+
+    return output;
 }
 
 /**
