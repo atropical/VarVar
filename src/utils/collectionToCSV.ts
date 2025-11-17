@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { getMatchingModeName } from "./variableUtils";
 
 /**
  * Represents the position and metadata of a variable in CSV format
@@ -61,10 +62,13 @@ const processCollectionToCSV = async (
               ? await figma.variables.getVariableCollectionByIdAsync(linkedVar.variableCollectionId)
               : {name:''};
             
+            const matchedModeName = linkedVarCollection && 'modes' in linkedVarCollection
+              ? getMatchingModeName(mode.name, linkedVarCollection)
+              : mode.name;
             value = linkedVar ? 
             collectionsVariablesMap && rowIndex 
             ? `=${linkedVar.id}`
-            : `=${linkedVarCollection ? linkedVarCollection.name : ''}/${mode.name}/${linkedVar.name}` : "_unlinked";
+            : `=${linkedVarCollection ? linkedVarCollection.name : ''}/${matchedModeName}/${linkedVar.name}` : "_unlinked";
           }
           else {
             value = isColor

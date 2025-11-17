@@ -1,5 +1,6 @@
 import { rgbToCssColor } from "./color";
 import { toCamelCase } from "./stringTransformation";
+import { getMatchingModeName } from "./variableUtils";
 
 /**
  * Processes a variable collection into JavaScript format
@@ -39,7 +40,10 @@ async function processCollection({
                   const collPrefix = linkedVarCollection && linkedVarCollection.name !== name ?
                     `${toCamelCase(linkedVarCollection.name)}.` : '';
 
-                    const aliasValue = `${collPrefix}${toCamelCase(mode.name)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}.value`;
+                    const matchedModeName = linkedVarCollection 
+                      ? getMatchingModeName(mode.name, linkedVarCollection)
+                      : mode.name;
+                    const aliasValue = `${collPrefix}${toCamelCase(matchedModeName)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}.value`;
                     currentObj[part] = description 
                       ? { value: aliasValue, description }
                       : { value: aliasValue };

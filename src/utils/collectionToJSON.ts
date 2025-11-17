@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { getMatchingModeName } from "./variableUtils";
 
 /**
  * Processes a variable collection into JSON format
@@ -45,7 +46,10 @@ async function processCollection({
               if(linkedVarCollection && name !== linkedVarCollection.name) {
                 collName = `$.${linkedVarCollection.name}`
               }
-              obj.$value = `${collName}.${mode.name}.${linkedVar.name.replace(/\//g, ".")}`;
+              const matchedModeName = linkedVarCollection 
+                ? getMatchingModeName(mode.name, linkedVarCollection)
+                : mode.name;
+              obj.$value = `${collName}.${matchedModeName}.${linkedVar.name.replace(/\//g, ".")}`;
             }
             else {
               obj.$value = "_unlinked"
