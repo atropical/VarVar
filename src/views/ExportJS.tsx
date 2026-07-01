@@ -24,6 +24,7 @@ export const ExportJS: React.FC<ExportJSProps> = ({ editorType = "" }) => {
         seeOutput,
         setSeeOutput,
         exportedData,
+        usedExtendedCollections,
         variablesCount,
         handleExport,
         handleSelectToCopy,
@@ -59,8 +60,9 @@ export const ExportJS: React.FC<ExportJSProps> = ({ editorType = "" }) => {
     );
 
     const preview = seeOutput && exportedData ? (
-        <OutputPreview 
+        <OutputPreview
             exportedData={exportedData}
+            usedExtendedCollections={usedExtendedCollections}
             editorType={editorType}
             onSelectToCopy={handleSelectToCopy}
         />

@@ -8,7 +8,7 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 - **Format-Specific Menu Commands**: Direct access to each export format from the Figma menu
 - **Linked Variable Support**: Identifies and properly handles linked variables across formats
 - **Scope-Aware Types**: JSON, CSV, and JS exports map variable scopes (`CORNER_RADIUS`, `FONT_WEIGHT`, `OPACITY`, etc.) to DTCG `$type`s instead of exporting bare numbers
-- **Extended Collection Hierarchy Export (Enterprise, BETA)**: JSON export detects Enterprise extended collections and preserves the inheritance model — see below
+- **Extended Collection Hierarchy Export (Enterprise, BETA)**: All export formats detect Enterprise extended collections and preserve the inheritance model instead of flattening it — see below
 - **Preview & Copy**: Preview exported data and easily copy to clipboard
 - **Automatic Downloads**: Exported files are automatically downloaded
 - **Row/Column Positioning**: CSV option for spreadsheet formula-like linking
@@ -27,14 +27,14 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 
 ### 🧪 Extended Collection Hierarchy Export (BETA)
 
-Figma's Enterprise-only [extended collections](https://help.figma.com/hc/en-us/articles/360040328273) let a "child" collection (e.g. a brand) inherit from a "parent" (e.g. a base design system) and override only what differs. VarVar's JSON export now detects this and preserves the hierarchy instead of flattening it:
+Figma's Enterprise-only [extended collections](https://help.figma.com/hc/en-us/articles/360040328273) let a "child" collection (e.g. a brand) inherit from a "parent" (e.g. a base design system) and override only what differs. All four export formats now detect this and preserve the hierarchy instead of flattening it:
 
-- Values actually overridden in the child collection get their own `$value`.
-- Everything else is exported as an alias reference into the parent collection's tokens.
-- Every value is tagged with `$extensions.figma.inherited: true/false`.
-- Output splits into `base.tokens.json` (all non-extended collections) plus one file per extended collection, bundled into a single `.zip` download.
+- Values actually overridden in the child collection keep their own value.
+- Everything else is exported as a reference into the parent collection's tokens (a `$value` alias in JSON, a plain CSS cascade in CSS, an `=Collection/mode/Variable` reference in CSV, a property-path reference in JS).
+- Every value is tagged as inherited or overridden (`$extensions.figma.inherited` in JSON, an `Inherited` column in CSV, an `inherited` field in JS; CSS relies on the cascade itself rather than a tag).
+- **JSON only:** output splits into `base.tokens.json` (all non-extended collections) plus one file per extended collection, bundled into a single `.zip` download. CSS, CSV, and JS stay single-file, representing inheritance inline.
 
-This only activates when extended collections are present in the file — accounts without Enterprise extended collections see no change to their JSON export. This feature is new and we haven't been able to validate it against a real Enterprise file ourselves, so **we'd love your feedback**: [open an issue](https://github.com/atropical/varvar/issues) if the output doesn't look right.
+This only activates when extended collections are present in the file — accounts without Enterprise extended collections see no change to their exports. This feature is new and we haven't been able to validate it against a real Enterprise file ourselves, so **we'd love your feedback**: [open an issue](https://github.com/atropical/varvar/issues) if the output doesn't look right.
 
 ## Installation
 

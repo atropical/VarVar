@@ -117,6 +117,7 @@ export interface PluginMessage {
   filename?: string;
   data?: string;
   files?: ExportFile[];
+  usedExtendedCollections?: boolean;
   error?: string;
   editorType?: string;
 }

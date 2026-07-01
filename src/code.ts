@@ -47,6 +47,12 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
         let data: string | undefined;
         let files: ExportFile[] | undefined;
 
+        const collections = await figma.variables.getLocalVariableCollectionsAsync();
+        // exportToTailwind doesn't have hierarchy-aware handling yet, so the
+        // flag stays false on that path even if extended collections exist.
+        const usedExtendedCollections = !(format === OutputFormats.CSS && useTailwindFormat)
+            && collections.some((collection) => collection.isExtension);
+
         switch (format) {
             case OutputFormats.CSV:
                 data = await exportToCSV(useLinkedVarRowAndColPos) || '';
@@ -75,6 +81,7 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
             format,
             data,
             files,
+            usedExtendedCollections,
         } as PluginMessage);
 
         figma.notify('✅ All variables were exported.');

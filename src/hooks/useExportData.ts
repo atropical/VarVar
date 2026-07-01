@@ -20,6 +20,7 @@ interface UseExportDataReturn {
     exportedData: string;
     setExportedData: (data: string) => void;
     exportedFiles: ExportFile[] | null;
+    usedExtendedCollections: boolean;
     variablesCount: number;
     handleExport: () => void;
     handleSelectToCopy: () => void;
@@ -43,6 +44,7 @@ export const useExportData = ({
     const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
     const [exportedData, setExportedData] = useState<string>("");
     const [exportedFiles, setExportedFiles] = useState<ExportFile[] | null>(null);
+    const [usedExtendedCollections, setUsedExtendedCollections] = useState<boolean>(false);
     const [variablesCount, setVariablesCount] = useState<number>(0);
 
     const handleExport = () => {
@@ -116,6 +118,7 @@ export const useExportData = ({
                     setExportedFiles(null);
                     setExportedData(pluginMessage.data || '');
                 }
+                setUsedExtendedCollections(!!pluginMessage.usedExtendedCollections);
 
                 // Only auto-download if preview is disabled
                 if (!seeOutput) {
@@ -178,6 +181,7 @@ export const useExportData = ({
         exportedData,
         setExportedData,
         exportedFiles,
+        usedExtendedCollections,
         variablesCount,
         handleExport,
         handleSelectToCopy,

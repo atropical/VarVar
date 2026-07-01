@@ -6,6 +6,7 @@ import { ExportFile } from "../types.d";
 interface OutputPreviewProps {
     exportedData: string;
     files?: ExportFile[] | null;
+    usedExtendedCollections?: boolean;
     editorType?: string;
     onSelectToCopy: () => void;
 }
@@ -17,6 +18,7 @@ interface OutputPreviewProps {
 export const OutputPreview: React.FC<OutputPreviewProps> = ({
     exportedData,
     files,
+    usedExtendedCollections = false,
     editorType = 'dev',
     onSelectToCopy
 }) => {
@@ -45,11 +47,12 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     return (
         <Flex direction="column" gap="2" style={{ flex: "2 0 300px", maxWidth: editorType === 'design' ? "454px" : undefined }}>
             <Text>Code Preview</Text>
-            {isMultiFile && (
+            {usedExtendedCollections && (
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
-                    🧪 <strong>Beta:</strong> Extended (Enterprise) collection hierarchy export
-                    is new. Inherited vs. overridden values are marked via
-                    <code> $extensions.figma.inherited</code>. Spotted something off?{' '}
+                    🧪 <strong>Beta:</strong> This export includes Extended (Enterprise) collections.
+                    Hierarchy-aware export is new — overridden values keep their own value,
+                    inherited values are exported as a reference into the parent collection.
+                    Spotted something off?{' '}
                     <Link target="_blank" href="https://github.com/atropical/varvar/issues">Let us know ↗</Link>
                 </Text>
             )}
