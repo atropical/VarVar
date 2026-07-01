@@ -8,6 +8,8 @@ Features
 Multiple Export Formats: JSON, JavaScript, CSV, CSS, and Tailwind CSS
 Format-Specific Menu Commands: Direct access to each export format from the Figma menu
 Linked Variable Support: Properly handles linked variables across all formats
+Scope-Aware Types: JSON, CSV, and JS exports map variable scopes (CORNER_RADIUS, FONT_WEIGHT, OPACITY, etc.) to DTCG $types instead of bare numbers
+Extended Collection Hierarchy Export (Enterprise, BETA): JSON export detects Enterprise extended collections and preserves inherited vs. overridden values instead of flattening them; splits into a .zip of per-collection files when extended collections are present. We'd love your feedback on this one, please open an issue with anything that looks off.
 Preview & Copy: Preview exported data and easily copy to clipboard
 Download: Exported variables can be downloaded as files
 Row/Column Positioning: CSV option for spreadsheet formula-like linking

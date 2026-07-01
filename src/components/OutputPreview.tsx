@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Flex, Text, Button } from "figma-kit";
+import { Flex, Text, Button, Link } from "figma-kit";
 import { copyToClipboard } from "../utils/clipboard";
 import { ExportFile } from "../types.d";
 
@@ -45,6 +45,14 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     return (
         <Flex direction="column" gap="2" style={{ flex: "2 0 300px", maxWidth: editorType === 'design' ? "454px" : undefined }}>
             <Text>Code Preview</Text>
+            {isMultiFile && (
+                <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
+                    🧪 <strong>Beta:</strong> Extended (Enterprise) collection hierarchy export
+                    is new. Inherited vs. overridden values are marked via
+                    <code> $extensions.figma.inherited</code>. Spotted something off?{' '}
+                    <Link target="_blank" href="https://github.com/atropical/varvar/issues">Let us know ↗</Link>
+                </Text>
+            )}
             {isMultiFile && (
                 <Flex direction="row" gap="2" style={{ flexWrap: 'wrap' }}>
                     {files.map((file, index) => (
