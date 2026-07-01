@@ -1,5 +1,6 @@
 import { rgbToCssColor } from "./color";
 import { toCssVar } from "./stringTransformation";
+import { isDimensionScope } from "./scopeToDTCG";
 
 /**
  * Processes a variable collection into CSS format
@@ -21,7 +22,7 @@ async function processCollection({
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name, resolvedType, valuesByMode, description }: Variable = figVar;
+        const { name, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
         const value: VariableValue = valuesByMode[mode.modeId];
 
         if (value !== undefined && validTypes.has(resolvedType)) {
@@ -44,10 +45,12 @@ async function processCollection({
             }
           }
           else {
-            cssValue = isColor 
+            cssValue = isColor
               ? rgbToCssColor(value as RGBA)
               : isNumber
-                ? `${parseFloat(value as string)}px`
+                ? isDimensionScope(scopes)
+                  ? `${parseFloat(value as string)}px`
+                  : `${parseFloat(value as string)}`
                   : isBool
                     ? Boolean(value) ? 'var(--TRUE)' : 'var(--FALSE)'
                     : `"${String(value)}"`;
