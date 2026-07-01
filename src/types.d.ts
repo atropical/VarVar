@@ -1,3 +1,5 @@
+declare module "*.css";
+
 type NumericRange<
   START extends number,
   END extends number,

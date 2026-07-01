@@ -1,5 +1,6 @@
 import { rgbToCssColor } from "./color";
 import { getMatchingModeName } from "./variableUtils";
+import { resolveScopedType, isDimensionScope } from "./scopeToDTCG";
 
 /**
  * Processes a variable collection into JSON format
@@ -33,9 +34,10 @@ async function processCollection({
           const isColor: boolean = resolvedType === "COLOR";
           const isNumber: boolean = resolvedType === "FLOAT";
           const isBool: boolean = resolvedType === "BOOLEAN";
-          obj.$type = resolvedType;
-          obj.$scopes = scopes;
+          const isDimension: boolean = isNumber && isDimensionScope(scopes);
+          obj.$type = resolveScopedType(scopes, resolvedType);
           obj.$description = description || '';
+          obj.$extensions = { figma: { scopes } };
           if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
             const linkedVar = await figma.variables.getVariableByIdAsync(value.id);
 
@@ -56,10 +58,12 @@ async function processCollection({
             }
           }
           else {
-            obj.$value = isColor 
+            obj.$value = isColor
               ? rgbToCssColor(value as RGBA)
               : isNumber
-                ? parseFloat(value as string)
+                ? isDimension
+                  ? `${parseFloat(value as string)}px`
+                  : parseFloat(value as string)
                   : isBool
                     ? Boolean(value)
                     : String(value);
