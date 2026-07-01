@@ -95,6 +95,16 @@ export enum MessageTypes {
 }
 
 /**
+ * A single named file produced by an export utility. Exporters that can
+ * split their output (e.g. extended-collection hierarchies) return an
+ * array of these; single-file exports return a one-element array.
+ */
+export interface ExportFile {
+  filename: string;
+  content: string;
+}
+
+/**
  * Plugin message interface for communication between UI and plugin code
  */
 export interface PluginMessage {
@@ -106,6 +116,7 @@ export interface PluginMessage {
   count?: number;
   filename?: string;
   data?: string;
+  files?: ExportFile[];
   error?: string;
   editorType?: string;
 }

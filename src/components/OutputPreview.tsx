@@ -1,28 +1,36 @@
 import React, { useState } from "react";
 import { Flex, Text, Button } from "figma-kit";
 import { copyToClipboard } from "../utils/clipboard";
+import { ExportFile } from "../types.d";
 
 interface OutputPreviewProps {
     exportedData: string;
+    files?: ExportFile[] | null;
     editorType?: string;
     onSelectToCopy: () => void;
 }
 
 /**
- * Code preview component with select-to-copy functionality
+ * Code preview component with select-to-copy functionality.
+ * When multiple files are provided, renders a tab selector above the preview.
  */
-export const OutputPreview: React.FC<OutputPreviewProps> = ({ 
-    exportedData, 
+export const OutputPreview: React.FC<OutputPreviewProps> = ({
+    exportedData,
+    files,
     editorType = 'dev',
-    onSelectToCopy 
+    onSelectToCopy
 }) => {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [activeFileIndex, setActiveFileIndex] = useState(0);
+
+    const isMultiFile = !!files && files.length > 1;
+    const activeContent = isMultiFile ? files[activeFileIndex].content : exportedData;
 
     const handleCopy = async () => {
         try {
-            const success = await copyToClipboard(exportedData);
+            const success = await copyToClipboard(activeContent);
             setCopyStatus(success ? 'success' : 'error');
-            
+
             // Reset status after 2 seconds
             setTimeout(() => setCopyStatus('idle'), 2000);
         } catch (error) {
@@ -32,12 +40,25 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
         }
     };
 
-    if (!exportedData) return null;
+    if (!activeContent) return null;
 
     return (
         <Flex direction="column" gap="2" style={{ flex: "2 0 300px", maxWidth: editorType === 'design' ? "454px" : undefined }}>
             <Text>Code Preview</Text>
-            <Flex 
+            {isMultiFile && (
+                <Flex direction="row" gap="2" style={{ flexWrap: 'wrap' }}>
+                    {files.map((file, index) => (
+                        <Button
+                            key={file.filename}
+                            variant={index === activeFileIndex ? "primary" : "secondary"}
+                            onClick={() => setActiveFileIndex(index)}
+                        >
+                            {file.filename}.json
+                        </Button>
+                    ))}
+                </Flex>
+            )}
+            <Flex
                 direction="column"
                 gap="2"
                 style={{
@@ -82,7 +103,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                             contentEditable
                             spellCheck="false"
                         >
-                            {exportedData.toString()}
+                            {activeContent.toString()}
                         </pre>
                     </Text>
                 </Flex>
