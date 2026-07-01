@@ -1,6 +1,7 @@
 import { rgbToCssColor } from "./color";
 import { toCamelCase } from "./stringTransformation";
 import { getMatchingModeName } from "./variableUtils";
+import { resolveScopedType } from "./scopeToDTCG";
 
 /**
  * Processes a variable collection into JavaScript format
@@ -21,8 +22,9 @@ async function processCollection({
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name, resolvedType, valuesByMode, description }: Variable = figVar;
+        const { name, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
         const value: VariableValue = valuesByMode[mode.modeId];
+        const dtcgType = resolveScopedType(scopes, resolvedType);
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           let currentObj = variables[toCamelCase(mode.name)];
@@ -44,9 +46,9 @@ async function processCollection({
                       ? getMatchingModeName(mode.name, linkedVarCollection)
                       : mode.name;
                     const aliasValue = `${collPrefix}${toCamelCase(matchedModeName)}.${linkedVar.name.split('/').map((str) => toCamelCase(str)).join('.')}.value`;
-                    currentObj[part] = description 
-                      ? { value: aliasValue, description }
-                      : { value: aliasValue };
+                    currentObj[part] = description
+                      ? { value: aliasValue, description, dtcgType }
+                      : { value: aliasValue, dtcgType };
                 } else {
                   currentObj[part] = '_unlinked';
                 }
@@ -60,8 +62,8 @@ async function processCollection({
                       : String(value);
                 
                 currentObj[part] = description
-                  ? { value: processedValue, description }
-                  : { value: processedValue };
+                  ? { value: processedValue, description, dtcgType }
+                  : { value: processedValue, dtcgType };
               }
             }
             else {
