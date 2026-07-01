@@ -1,5 +1,6 @@
 import { rgbToCssColor } from "./color";
 import { getMatchingModeName } from "./variableUtils";
+import { resolveScopedType } from "./scopeToDTCG";
 
 /**
  * Represents the position and metadata of a variable in CSV format
@@ -84,7 +85,8 @@ const processCollectionToCSV = async (
             };
           }
           const scopesStr = `"${scopes.toString()}"`
-          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${value},${scopesStr},${varDescription}`);
+          const dtcgType = resolveScopedType(scopes, resolvedType);
+          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${dtcgType},${value},${scopesStr},${varDescription}`);
         }
       }
     }
@@ -99,7 +101,7 @@ const processCollectionToCSV = async (
  * @returns CSV string with all variables
  */
 export const exportToCSV = async (useLinkedVarRowAndColPos: boolean = false): Promise<string | undefined> => {
-  const csvData = ["Collection,Mode,Variable,Type,Value,Scopes,Description"];
+  const csvData = ["Collection,Mode,Variable,Type,DTCG Type,Value,Scopes,Description"];
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   let collectionsVariablesMap = new Map<string, VariablePosition>();
 
