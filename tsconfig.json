@@ -13,7 +13,7 @@
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "types": ["@figma/plugin-typings"]
+    "types": ["@figma/plugin-typings", "vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]
