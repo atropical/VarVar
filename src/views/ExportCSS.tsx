@@ -26,6 +26,7 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
         useTailwindFormat,
         setUseTailwindFormat,
         exportedData,
+        usedExtendedCollections,
         variablesCount,
         handleExport,
         handleSelectToCopy,
@@ -63,8 +64,9 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
     );
 
     const preview = seeOutput && exportedData ? (
-        <OutputPreview 
+        <OutputPreview
             exportedData={exportedData}
+            usedExtendedCollections={usedExtendedCollections}
             editorType={editorType}
             onSelectToCopy={handleSelectToCopy}
         />

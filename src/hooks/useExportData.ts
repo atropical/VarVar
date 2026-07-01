@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { OutputFormats } from "../types.d";
+import JSZip from "jszip";
+import { OutputFormats, ExportFile } from "../types.d";
 
 interface UseExportDataProps {
     format: OutputFormats;
@@ -18,6 +19,8 @@ interface UseExportDataReturn {
     setUseTailwindFormat: (useTailwindFormat: boolean) => void;
     exportedData: string;
     setExportedData: (data: string) => void;
+    exportedFiles: ExportFile[] | null;
+    usedExtendedCollections: boolean;
     variablesCount: number;
     handleExport: () => void;
     handleSelectToCopy: () => void;
@@ -40,6 +43,8 @@ export const useExportData = ({
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
     const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
     const [exportedData, setExportedData] = useState<string>("");
+    const [exportedFiles, setExportedFiles] = useState<ExportFile[] | null>(null);
+    const [usedExtendedCollections, setUsedExtendedCollections] = useState<boolean>(false);
     const [variablesCount, setVariablesCount] = useState<number>(0);
 
     const handleExport = () => {
@@ -75,8 +80,24 @@ export const useExportData = ({
         URL.revokeObjectURL(url);
     };
 
+    const downloadZip = async (files: ExportFile[], fileName: string) => {
+        const zip = new JSZip();
+        files.forEach((file) => {
+            zip.file(`${file.filename}.json`, file.content);
+        });
+        const blob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${fileName}.zip`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
     const handleDownload = () => {
-        if (exportedData) {
+        if (exportedFiles && exportedFiles.length > 1) {
+            downloadZip(exportedFiles, filename);
+        } else if (exportedData) {
             downloadFile(exportedData, format, filename);
         }
     };
@@ -88,11 +109,24 @@ export const useExportData = ({
                 const defaultFilename = `${pluginMessage.filename}_variables`;
                 setFilename(defaultFilename);
             } else if (pluginMessage.type === "EXPORT.SUCCESS.RESULT") {
-                setExportedData(pluginMessage.data);
+                const multiFile = pluginMessage.files && pluginMessage.files.length > 1;
+
+                if (multiFile) {
+                    setExportedFiles(pluginMessage.files);
+                    setExportedData(pluginMessage.files[0].content);
+                } else {
+                    setExportedFiles(null);
+                    setExportedData(pluginMessage.data || '');
+                }
+                setUsedExtendedCollections(!!pluginMessage.usedExtendedCollections);
 
                 // Only auto-download if preview is disabled
                 if (!seeOutput) {
-                    downloadFile(pluginMessage.data, pluginMessage.format, filename);
+                    if (multiFile) {
+                        downloadZip(pluginMessage.files, filename);
+                    } else {
+                        downloadFile(pluginMessage.data, pluginMessage.format, filename);
+                    }
                 }
             }
         };
@@ -146,6 +180,8 @@ export const useExportData = ({
         setUseTailwindFormat,
         exportedData,
         setExportedData,
+        exportedFiles,
+        usedExtendedCollections,
         variablesCount,
         handleExport,
         handleSelectToCopy,

@@ -14,6 +14,19 @@ export const toCssVar = (string: string, prependDoubleDash: boolean = false) => 
 }
 
 /**
+ * Converts a string to a filesystem-safe kebab-case slug
+ * @param {string} string - The string to convert
+ * @returns {string} The slugified string
+ */
+export const toFileSlug = (string: string) => {
+    return string
+        .trim()
+        .toLowerCase()
+        .replace(/[\s/]+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+}
+
+/**
  * Converts a string to camel case
  * @param {string} string - The string to convert
  * @param {boolean} detectAllCaps - Whether to detect all caps

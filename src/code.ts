@@ -5,7 +5,7 @@ import { exportToJSON } from "./utils/collectionToJSON";
 import { exportToCSS } from "./utils/collectionToCSS";
 import { exportToTailwind } from "./utils/collectionToTailwind";
 import { exportToJS } from "./utils/collectionToJS";
-import { OutputFormats, MessageTypes, PluginCommands, PluginMessage } from "./types.d";
+import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile } from "./types.d";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
 
@@ -44,15 +44,28 @@ async function handleBasicInfo(command?: PluginCommands) {
  */
 async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false) {
     try {
-        let data: string;
-        
+        let data: string | undefined;
+        let files: ExportFile[] | undefined;
+
+        const collections = await figma.variables.getLocalVariableCollectionsAsync();
+        // exportToTailwind doesn't have hierarchy-aware handling yet, so the
+        // flag stays false on that path even if extended collections exist.
+        const usedExtendedCollections = !(format === OutputFormats.CSS && useTailwindFormat)
+            && collections.some((collection) => collection.isExtension);
+
         switch (format) {
             case OutputFormats.CSV:
                 data = await exportToCSV(useLinkedVarRowAndColPos) || '';
                 break;
-            case OutputFormats.JSON:
-                data = await exportToJSON() || '';
+            case OutputFormats.JSON: {
+                const jsonFiles = await exportToJSON() || [];
+                if (jsonFiles.length <= 1) {
+                    data = jsonFiles[0] ? jsonFiles[0].content : '';
+                } else {
+                    files = jsonFiles;
+                }
                 break;
+            }
             case OutputFormats.JS:
                 data = await exportToJS() || '';
                 break;
@@ -62,13 +75,15 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
-        
+
         figma.ui.postMessage({
             type: MessageTypes.EXPORT_SUCCESS_RESULT,
             format,
             data,
+            files,
+            usedExtendedCollections,
         } as PluginMessage);
-        
+
         figma.notify('✅ All variables were exported.');
     } catch (error) {
         console.error(error);
