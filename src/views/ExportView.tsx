@@ -28,6 +28,8 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         setUseRowColumnPos,
         useTailwindFormat,
         setUseTailwindFormat,
+        useLegacyFormat,
+        setUseLegacyFormat,
         exportedData,
         setExportedData,
         variablesCount,
@@ -47,6 +49,13 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
     useEffect(() => {
         if (format !== OutputFormats.CSS) {
             setUseTailwindFormat(false);
+        }
+    }, [format]);
+
+    // Reset useLegacyFormat when format changes to one without a legacy shape (CSS)
+    useEffect(() => {
+        if (format === OutputFormats.CSS) {
+            setUseLegacyFormat(false);
         }
     }, [format]);
 
@@ -88,9 +97,11 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                 seeOutput={seeOutput}
                 useRowColumnPos={useRowColumnPos}
                 useTailwindFormat={useTailwindFormat}
+                useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={setUseRowColumnPos}
                 onUseTailwindFormatChange={setUseTailwindFormat}
+                onUseLegacyFormatChange={setUseLegacyFormat}
             />
 
             <FilenameInput 

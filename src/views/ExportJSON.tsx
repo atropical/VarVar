@@ -23,6 +23,8 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
         setFilename,
         seeOutput,
         setSeeOutput,
+        useLegacyFormat,
+        setUseLegacyFormat,
         exportedData,
         exportedFiles,
         usedExtendedCollections,
@@ -40,8 +42,10 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
                 format={format}
                 seeOutput={seeOutput}
                 useRowColumnPos={false}
+                useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
+                onUseLegacyFormatChange={setUseLegacyFormat}
             />
 
             <FilenameInput 

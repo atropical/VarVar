@@ -113,6 +113,7 @@ export interface PluginMessage {
   format?: OutputFormats;
   useLinkedVarRowAndColPos?: boolean;
   useTailwindFormat?: boolean;
+  useLegacyFormat?: boolean;
   count?: number;
   filename?: string;
   data?: string;

@@ -5,6 +5,9 @@ import { exportToJSON } from "./utils/collectionToJSON";
 import { exportToCSS } from "./utils/collectionToCSS";
 import { exportToTailwind } from "./utils/collectionToTailwind";
 import { exportToJS } from "./utils/collectionToJS";
+import { toLegacyJSON } from "./utils/legacyJsonConverter";
+import { toLegacyCSV } from "./utils/legacyCsvConverter";
+import { toLegacyJS } from "./utils/legacyJsConverter";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile } from "./types.d";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
@@ -42,7 +45,7 @@ async function handleBasicInfo(command?: PluginCommands) {
 /**
  * Handles export requests with format-specific logic
  */
-async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false) {
+async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false, useLegacyFormat: boolean = false) {
     try {
         let data: string | undefined;
         let files: ExportFile[] | undefined;
@@ -50,25 +53,34 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
         const collections = await figma.variables.getLocalVariableCollectionsAsync();
         // exportToTailwind doesn't have hierarchy-aware handling yet, so the
         // flag stays false on that path even if extended collections exist.
+        // Legacy format (JSON/CSV) flattens extended collections into one file,
+        // so it shouldn't surface the "extended collections" preview note either.
         const usedExtendedCollections = !(format === OutputFormats.CSS && useTailwindFormat)
+            && !(format === OutputFormats.JSON && useLegacyFormat)
+            && !(format === OutputFormats.CSV && useLegacyFormat)
             && collections.some((collection) => collection.isExtension);
 
         switch (format) {
-            case OutputFormats.CSV:
-                data = await exportToCSV(useLinkedVarRowAndColPos) || '';
+            case OutputFormats.CSV: {
+                const csv = await exportToCSV(useLinkedVarRowAndColPos) || '';
+                data = useLegacyFormat ? toLegacyCSV(csv) : csv;
                 break;
+            }
             case OutputFormats.JSON: {
                 const jsonFiles = await exportToJSON() || [];
-                if (jsonFiles.length <= 1) {
-                    data = jsonFiles[0] ? jsonFiles[0].content : '';
+                const outputFiles = useLegacyFormat ? toLegacyJSON(jsonFiles) : jsonFiles;
+                if (outputFiles.length <= 1) {
+                    data = outputFiles[0] ? outputFiles[0].content : '';
                 } else {
-                    files = jsonFiles;
+                    files = outputFiles;
                 }
                 break;
             }
-            case OutputFormats.JS:
-                data = await exportToJS() || '';
+            case OutputFormats.JS: {
+                const js = await exportToJS() || '';
+                data = useLegacyFormat ? toLegacyJS(js) : js;
                 break;
+            }
             case OutputFormats.CSS:
                 data = useTailwindFormat ? await exportToTailwind() : await exportToCSS();
                 break;
@@ -109,7 +121,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             
         case MessageTypes.EXPORT_SUCCESS:
             if (msg.format) {
-                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false);
+                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false, msg.useLegacyFormat || false);
             } else {
                 console.error('Export request missing format');
             }

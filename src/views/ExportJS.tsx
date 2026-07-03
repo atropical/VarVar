@@ -23,6 +23,8 @@ export const ExportJS: React.FC<ExportJSProps> = ({ editorType = "" }) => {
         setFilename,
         seeOutput,
         setSeeOutput,
+        useLegacyFormat,
+        setUseLegacyFormat,
         exportedData,
         usedExtendedCollections,
         variablesCount,
@@ -39,8 +41,10 @@ export const ExportJS: React.FC<ExportJSProps> = ({ editorType = "" }) => {
                 format={format}
                 seeOutput={seeOutput}
                 useRowColumnPos={false}
+                useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
+                onUseLegacyFormatChange={setUseLegacyFormat}
             />
 
             <FilenameInput 

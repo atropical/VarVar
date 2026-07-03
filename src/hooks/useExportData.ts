@@ -6,6 +6,7 @@ interface UseExportDataProps {
     format: OutputFormats;
     useRowColumnPos?: boolean;
     useTailwindFormat?: boolean;
+    useLegacyFormat?: boolean;
 }
 
 interface UseExportDataReturn {
@@ -17,6 +18,8 @@ interface UseExportDataReturn {
     setUseRowColumnPos: (useRowColumnPos: boolean) => void;
     useTailwindFormat: boolean;
     setUseTailwindFormat: (useTailwindFormat: boolean) => void;
+    useLegacyFormat: boolean;
+    setUseLegacyFormat: (useLegacyFormat: boolean) => void;
     exportedData: string;
     setExportedData: (data: string) => void;
     exportedFiles: ExportFile[] | null;
@@ -33,28 +36,35 @@ interface UseExportDataReturn {
  * @param useRowColumnPos - Whether to use row and column positions for linked variables
  * @returns An object containing the filename, seeOutput, useRowColumnPos, exportedData, variablesCount, handleExport, handleSelectToCopy, and handleDownload
  */
-export const useExportData = ({ 
-    format, 
+export const useExportData = ({
+    format,
     useRowColumnPos: initialUseRowColumnPos = false,
-    useTailwindFormat: initialUseTailwindFormat = false
+    useTailwindFormat: initialUseTailwindFormat = false,
+    useLegacyFormat: initialUseLegacyFormat = false
 }: UseExportDataProps): UseExportDataReturn => {
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
     const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
+    const [useLegacyFormat, setUseLegacyFormat] = useState<boolean>(initialUseLegacyFormat);
     const [exportedData, setExportedData] = useState<string>("");
     const [exportedFiles, setExportedFiles] = useState<ExportFile[] | null>(null);
     const [usedExtendedCollections, setUsedExtendedCollections] = useState<boolean>(false);
     const [variablesCount, setVariablesCount] = useState<number>(0);
 
+    const supportsLegacyFormat = format === OutputFormats.JSON
+        || format === OutputFormats.CSV
+        || format === OutputFormats.JS;
+
     const handleExport = () => {
-        parent.postMessage({ 
-            pluginMessage: { 
-                type: "EXPORT.SUCCESS" as any, 
-                format, 
+        parent.postMessage({
+            pluginMessage: {
+                type: "EXPORT.SUCCESS" as any,
+                format,
                 useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
-                useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false
-            } 
+                useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
+                useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
+            }
         }, "*");
     };
 
@@ -151,16 +161,33 @@ export const useExportData = ({
     useEffect(() => {
         if (format === OutputFormats.CSV && exportedData) {
             // Trigger re-export when row/column position toggle changes
-            parent.postMessage({ 
-                pluginMessage: { 
-                    type: "EXPORT.SUCCESS" as any, 
-                    format, 
+            parent.postMessage({
+                pluginMessage: {
+                    type: "EXPORT.SUCCESS" as any,
+                    format,
                     useLinkedVarRowAndColPos: useRowColumnPos,
-                    useTailwindFormat: false
-                } 
+                    useTailwindFormat: false,
+                    useLegacyFormat
+                }
             }, "*");
         }
     }, [useRowColumnPos, format]);
+
+    // Re-export when legacy format changes (for JSON/CSV/JS formats)
+    useEffect(() => {
+        if (supportsLegacyFormat && exportedData) {
+            // Trigger re-export when legacy format toggle changes
+            parent.postMessage({
+                pluginMessage: {
+                    type: "EXPORT.SUCCESS" as any,
+                    format,
+                    useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
+                    useTailwindFormat: false,
+                    useLegacyFormat
+                }
+            }, "*");
+        }
+    }, [useLegacyFormat, format]);
 
     // Request basic info on mount (only if not already received)
     useEffect(() => {
@@ -178,6 +205,8 @@ export const useExportData = ({
         setUseRowColumnPos,
         useTailwindFormat,
         setUseTailwindFormat,
+        useLegacyFormat,
+        setUseLegacyFormat,
         exportedData,
         setExportedData,
         exportedFiles,
