@@ -94,7 +94,7 @@ async function processCollection({
           });
           obj.$type = resolveScopedType(scopes, resolvedType);
           obj.$description = description || '';
-          obj.$extensions = { figma: { scopes } };
+          obj.$extensions = { figma: { scopes, resolvedType } };
 
           if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
             obj.$value = await resolveAliasValue(value, mode.name, name);
@@ -147,7 +147,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           });
           obj.$type = resolveScopedType(scopes, resolvedType);
           obj.$description = description || '';
-          obj.$extensions = { figma: { scopes, inherited: isInherited } };
+          obj.$extensions = { figma: { scopes, resolvedType, inherited: isInherited } };
 
           if (isInherited) {
             const parentCollName = parentCollection ? parentCollection.name : name;

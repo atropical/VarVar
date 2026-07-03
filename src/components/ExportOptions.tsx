@@ -7,9 +7,11 @@ interface ExportOptionsProps {
     seeOutput: boolean;
     useRowColumnPos: boolean;
     useTailwindFormat?: boolean;
+    useLegacyFormat?: boolean;
     onSeeOutputChange: (seeOutput: boolean) => void;
     onUseRowColumnPosChange: (useRowColumnPos: boolean) => void;
     onUseTailwindFormatChange?: (useTailwindFormat: boolean) => void;
+    onUseLegacyFormatChange?: (useLegacyFormat: boolean) => void;
 }
 
 /**
@@ -20,9 +22,11 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
     seeOutput,
     useRowColumnPos,
     useTailwindFormat = false,
+    useLegacyFormat = false,
     onSeeOutputChange,
     onUseRowColumnPosChange,
-    onUseTailwindFormatChange
+    onUseTailwindFormatChange,
+    onUseLegacyFormatChange
 }) => {
     return (
         <Flex gap="2" direction="column">
@@ -61,6 +65,28 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                 </Flex>
             )}
             
+            {/* Legacy format option - JSON, CSV and JS formats changed shape in v3.0 */}
+            {(format === OutputFormats.JSON || format === OutputFormats.CSV || format === OutputFormats.JS) && onUseLegacyFormatChange && (
+                <Flex gap="2">
+                    <Switch
+                        id="varvar-export-legacy-format"
+                        onCheckedChange={onUseLegacyFormatChange}
+                        checked={useLegacyFormat}
+                        style={{ flexShrink: 0 }}
+                    />
+                    <Label htmlFor="varvar-export-legacy-format">
+                        Export using legacy format (v2.x)
+                    </Label>
+                    <span title={
+                        format === OutputFormats.JSON
+                            ? "Exports using the pre-3.0 JSON shape: raw $type, no px units on numeric values, and a single flat file even if you use Enterprise extended collections."
+                            : format === OutputFormats.CSV
+                                ? "Exports using the pre-3.0 CSV shape: drops the \"DTCG Type\" and \"Inherited\" columns added in 3.0."
+                                : "Exports using the pre-3.0 JS shape: drops the \"dtcgType\" and \"inherited\" fields added to each value in 3.0."
+                    } style={{ backgroundColor: 'var(--figma-color-text-secondary)', fontFamily: 'sans-serif', cursor: 'help', userSelect: 'none', color: 'var(--figma-color-text-secondary-inverse)', borderRadius: '50%', padding: '1px', fontSize: '.6em', width: '1em', height: '1em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>?</span>
+                </Flex>
+            )}
+
             {/* Preview option - available for all formats */}
             <Flex gap="2">
                 <Switch 

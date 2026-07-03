@@ -25,6 +25,8 @@ export const ExportCSV: React.FC<ExportCSVProps> = ({ editorType = "" }) => {
         setSeeOutput,
         useRowColumnPos,
         setUseRowColumnPos,
+        useLegacyFormat,
+        setUseLegacyFormat,
         exportedData,
         usedExtendedCollections,
         variablesCount,
@@ -41,8 +43,10 @@ export const ExportCSV: React.FC<ExportCSVProps> = ({ editorType = "" }) => {
                 format={format}
                 seeOutput={seeOutput}
                 useRowColumnPos={useRowColumnPos}
+                useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={setUseRowColumnPos}
+                onUseLegacyFormatChange={setUseLegacyFormat}
             />
 
             <FilenameInput 
