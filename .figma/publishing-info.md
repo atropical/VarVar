@@ -55,9 +55,9 @@ DESCRIPTION:
 - Copy the results in one click!
 
 
-VarVar is open source, consider contributing. Code available on (GitHub)[https://github.com/atropical/varvar].
+VarVar is open source, consider contributing. Code available on [GitHub](https://github.com/atropical/varvar).
 
-For bug reports, suggestions, or questions, please open an issue.
+For bug reports, suggestions, or questions, please open an [issue](https://github.com/atropical/varvar/issues).
 
 
 
