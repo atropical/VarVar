@@ -1,11 +1,12 @@
 TAGLINE:
-Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS with format-specific menu commands.
+Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS. Import them back in from JSON.
 
 DESCRIPTION:
-**VarVar** is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. Now with format-specific menu commands for faster exports!
+**VarVar** is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. It can also import a previously exported JSON file back into a document, recreating collections, modes, variables, and linked variables.
 
 ## Features
 **Multiple Export Formats:** JSON, JavaScript, CSV, CSS, and Tailwind CSS
+**JSON Import§:** Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, with an optional "replace existing variables" mode
 **Format-Specific Menu Commands:** Direct access to each export format from the Figma menu
 **Linked Variable Support:** Properly handles linked variables across all formats†
 **Scope-Aware Types:** JSON, CSV, and JS exports map variable scopes (`CORNER_RADIUS`, `FONT_WEIGHT`, `OPACITY`, etc.) to DTCG `$types` instead of bare numbers
@@ -29,6 +30,7 @@ DESCRIPTION:
 
 † When dealing with linked variables that have multiple modes, the plugin will only link to the first occurrence (i.e., the first mode it finds).
 ‡ Enterprise fella? We'd love your feedback on this one, please open an issue with anything that looks off.
+§ A leading `.` or `_` is Figma's own convention for marking a collection, variable, or group "private" (hidden from publishing). Import handles this correctly: linked-variable references are matched against your file's actual collection/mode names (so a `.` isn't confused with the JSON path separator), and any newly created collection/variable whose name starts with `.` or `_` gets `hiddenFromPublishing` set to match, so the privacy actually carries over rather than just looking private. Still review the import summary's warnings for anything it couldn't confidently match.
 
 
 
@@ -55,6 +57,15 @@ DESCRIPTION:
 - Copy the results in one click!
 
 
+### Importing Variables (JSON)
+1. Open your Figma file
+2. Run the VarVar plugin from the Plugins menu
+3. Choose **Import…**
+4. Select one or more JSON files previously exported by VarVar
+5. Optionally turn on "Replace existing variables" — this deletes all existing local variable collections before importing, so you'll be asked to confirm first
+6. Click "Import Variables"
+
+
 VarVar is open source, consider contributing. Code available on [GitHub](https://github.com/atropical/varvar).
 
 For bug reports, suggestions, or questions, please open an [issue](https://github.com/atropical/varvar/issues).
@@ -62,4 +73,4 @@ For bug reports, suggestions, or questions, please open an [issue](https://githu
 
 
 TAGS:
-variables, export variables, variables to json, variables to javascript, variables to csv, variables to css, variables to tailwind, tailwind css, developer, tokens, export, json, csv, css, design tokens, figma variables, menu commands, quick export, legacy format
+variables, export variables, variables to json, variables to javascript, variables to csv, variables to css, variables to tailwind, tailwind css, developer, tokens, export, import, import variables, json to variables, json, csv, css, design tokens, figma variables, menu commands, quick export, legacy format

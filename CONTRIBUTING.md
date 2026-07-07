@@ -188,6 +188,7 @@ Before submitting a PR, test the following:
 4. **Error handling**: Test with edge cases and invalid data
 5. **UI responsiveness**: Check different screen sizes
 6. **File downloads**: Verify files are downloaded correctly
+7. **JSON import**: Round-trip an export back in (merge and replace-existing paths), including cross-collection linked variables and a broken/`_unlinked` reference
 
 ### Automated Testing
 

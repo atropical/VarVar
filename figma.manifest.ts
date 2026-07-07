@@ -16,7 +16,9 @@ export default {
       ]
     },
     {"separator": true},
-    { "command": "export", "name": "Export Variables" }
+    { "command": "export", "name": "Export Variables" },
+    {"separator": true},
+    { "command": "import-json", "name": "Import…" }
   ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
