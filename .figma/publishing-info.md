@@ -1,12 +1,12 @@
 TAGLINE:
-Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS — and import them back in from JSON — with format-specific menu commands.
+Export Figma Variables to JSON, JS, CSV, CSS and Tailwind CSS. Import them back in from JSON.
 
 DESCRIPTION:
-**VarVar** is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. It can also import a previously exported JSON file back into a document, recreating collections, modes, variables, and linked variables. Now with format-specific menu commands for faster exports!
+**VarVar** is a Figma plugin that allows you to export your Figma variables to JSON, JS, CSV, CSS, or Tailwind CSS formats, making it easier to integrate your design tokens into your development workflow. It can also import a previously exported JSON file back into a document, recreating collections, modes, variables, and linked variables.
 
 ## Features
 **Multiple Export Formats:** JSON, JavaScript, CSV, CSS, and Tailwind CSS
-**JSON Import§:** Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, with an optional "replace existing variables" mode (deletes all existing local variable collections first, behind a confirmation dialog)
+**JSON Import§:** Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, with an optional "replace existing variables" mode
 **Format-Specific Menu Commands:** Direct access to each export format from the Figma menu
 **Linked Variable Support:** Properly handles linked variables across all formats†
 **Scope-Aware Types:** JSON, CSV, and JS exports map variable scopes (`CORNER_RADIUS`, `FONT_WEIGHT`, `OPACITY`, etc.) to DTCG `$types` instead of bare numbers
@@ -30,7 +30,7 @@ DESCRIPTION:
 
 † When dealing with linked variables that have multiple modes, the plugin will only link to the first occurrence (i.e., the first mode it finds).
 ‡ Enterprise fella? We'd love your feedback on this one, please open an issue with anything that looks off.
-§ A leading `.` or `_` is Figma's own convention for marking a collection, variable, or group "private" (hidden from publishing) — not unusual at all, plenty of real design systems use it. Import handles this correctly: linked-variable references are matched against your file's actual collection/mode names (so a `.` isn't confused with the JSON path separator), and any newly created collection/variable whose name starts with `.` or `_` gets `hiddenFromPublishing` set to match, so the privacy actually carries over rather than just looking private. Still review the import summary's warnings for anything it couldn't confidently match.
+§ A leading `.` or `_` is Figma's own convention for marking a collection, variable, or group "private" (hidden from publishing). Import handles this correctly: linked-variable references are matched against your file's actual collection/mode names (so a `.` isn't confused with the JSON path separator), and any newly created collection/variable whose name starts with `.` or `_` gets `hiddenFromPublishing` set to match, so the privacy actually carries over rather than just looking private. Still review the import summary's warnings for anything it couldn't confidently match.
 
 
 
