@@ -1,5 +1,4 @@
 import { cssColorToRgba } from "./color";
-import { getMatchingModeName } from "./variableUtils";
 import type { ImportSummary } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -121,36 +120,98 @@ function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings
   return { records, warnings };
 }
 
-interface AliasReference {
+/**
+ * True if this is the plugin's `$.Collection.Mode.path` alias-reference
+ * convention (as opposed to a literal value or `"_unlinked"`).
+ */
+function isAliasValue(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("$.") && value !== "_unlinked";
+}
+
+interface AliasTarget {
   collectionName: string;
   modeName: string;
   path: string;
 }
 
 /**
- * Parses a `$.Collection.Mode.path` (or same-collection `$..Mode.path`)
- * alias-reference string back into its parts. Returns `null` for anything
- * that isn't the alias-reference convention (including `"_unlinked"`).
+ * Splits `body` on the longest name in `names` that it starts with, as
+ * `"<name>.<rest>"`. Matching against known names (rather than blindly
+ * splitting on every "." ) is what lets collection/mode/group names that
+ * themselves contain literal dots round-trip correctly.
  */
-export function parseAliasReference(value: unknown, currentCollectionName: string): AliasReference | null {
-  if (typeof value !== "string" || !value.startsWith("$.")) {
-    return null;
+function splitOnKnownName(body: string, names: string[]): { name: string; rest: string } | undefined {
+  const sorted = [...names].sort((a, b) => b.length - a.length);
+  for (const name of sorted) {
+    if (body.startsWith(`${name}.`)) {
+      return { name, rest: body.slice(name.length + 1) };
+    }
   }
+  return undefined;
+}
 
+/**
+ * Resolves a `$.Collection.Mode.path` (or same-collection `$..Mode.path`)
+ * alias-reference string into every plausible `{collection, mode, path}`
+ * interpretation, most-specific first. The convention's own "." separator
+ * is ambiguous with a literal "." inside a collection/mode/group name (e.g.
+ * a collection named ".Brand"), so this can't be resolved by string-splitting
+ * alone — instead it's matched against the actual known collection/mode
+ * names, and the caller validates each candidate against real variables
+ * until one resolves.
+ */
+function resolveAliasCandidates(
+  value: string,
+  currentCollectionName: string,
+  collectionsByName: Map<string, VariableCollection>
+): AliasTarget[] {
   const remainder = value.slice(2);
-  const sameCollection = remainder.startsWith(".");
-  const body = sameCollection ? remainder.slice(1) : remainder;
+  const candidates: AliasTarget[] = [];
 
-  const parts = body.split(".");
-  if (sameCollection) {
-    const [modeName, ...pathParts] = parts;
-    if (!modeName || pathParts.length === 0) return null;
-    return { collectionName: currentCollectionName, modeName, path: pathParts.join("/") };
+  // Explicit "$.Collection.Mode.path" form — tried first since matching an
+  // actual known collection name is stronger evidence than the generic
+  // same-collection fallback below.
+  const collectionNames = [...collectionsByName.keys()].sort((a, b) => b.length - a.length);
+  for (const collectionName of collectionNames) {
+    if (!remainder.startsWith(`${collectionName}.`)) continue;
+    const rest = remainder.slice(collectionName.length + 1);
+    const split = splitOnKnownName(rest, collectionsByName.get(collectionName)!.modes.map((m) => m.name));
+    if (split) {
+      candidates.push({ collectionName, modeName: split.name, path: split.rest.replace(/\./g, "/") });
+    }
   }
 
-  const [collectionName, modeName, ...pathParts] = parts;
-  if (!collectionName || !modeName || pathParts.length === 0) return null;
-  return { collectionName, modeName, path: pathParts.join("/") };
+  // Same-collection "$..Mode.path" form (empty collection segment).
+  if (remainder.startsWith(".")) {
+    const currentCollection = collectionsByName.get(currentCollectionName);
+    if (currentCollection) {
+      const split = splitOnKnownName(remainder.slice(1), currentCollection.modes.map((m) => m.name));
+      if (split) {
+        candidates.push({ collectionName: currentCollectionName, modeName: split.name, path: split.rest.replace(/\./g, "/") });
+      }
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Figma treats a `.` or `_`-prefixed name segment as "private" — hidden from
+ * publishing when the file is shared as a library — for collections,
+ * variables, components, and styles alike. A collection or variable whose
+ * name (or any group segment of it) starts with either prefix is recreated
+ * on import with `hiddenFromPublishing` set, so that intent survives the
+ * round-trip rather than just looking private without actually being so.
+ */
+function hasPrivateNamingConvention(name: string): boolean {
+  return name.split("/").some((segment) => segment.startsWith(".") || segment.startsWith("_"));
+}
+
+async function findVariableByName(collection: VariableCollection, name: string): Promise<Variable | undefined> {
+  const variables = await Promise.all(
+    collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
+  );
+  return variables.find((v): v is Variable => v !== null && v.name === name);
 }
 
 function parseLiteralValue(
@@ -227,6 +288,9 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
     let isNewCollection = false;
     if (!collection) {
       collection = figma.variables.createVariableCollection(collectionName);
+      if (hasPrivateNamingConvention(collectionName)) {
+        collection.hiddenFromPublishing = true;
+      }
       collectionsByName.set(collectionName, collection);
       summary.collectionsCreated += 1;
       isNewCollection = true;
@@ -261,7 +325,7 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
   const seenPaths = new Set<string>();
 
   for (const record of records) {
-    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
+    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
     if (seenPaths.has(pathKey)) continue;
     seenPaths.add(pathKey);
 
@@ -269,10 +333,7 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
     if (!collection) continue;
 
     const varName = record.pathParts.join("/");
-    const existingVariables = await Promise.all(
-      collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
-    );
-    const existingVariable = existingVariables.find((v) => v !== null && v.name === varName) as Variable | undefined;
+    const existingVariable = await findVariableByName(collection, varName);
 
     let variable: Variable;
     if (existingVariable) {
@@ -286,6 +347,9 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
       summary.variablesUpdated += 1;
     } else {
       variable = figma.variables.createVariable(varName, collection, record.resolvedType);
+      if (hasPrivateNamingConvention(varName)) {
+        variable.hiddenFromPublishing = true;
+      }
       summary.variablesCreated += 1;
     }
 
@@ -307,12 +371,12 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
       );
       continue;
     }
-    if (parseAliasReference(record.rawValue, record.collectionName)) {
+    if (isAliasValue(record.rawValue)) {
       aliasRecords.push(record);
       continue;
     }
 
-    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
+    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
     const variable = variablesByCollectionAndPath.get(pathKey);
     const collection = collectionsByName.get(record.collectionName);
     if (!variable || !collection) continue;
@@ -331,7 +395,7 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
   }
 
   for (const record of aliasRecords) {
-    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
+    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
     const variable = variablesByCollectionAndPath.get(pathKey);
     const collection = collectionsByName.get(record.collectionName);
     if (!variable || !collection) continue;
@@ -339,34 +403,30 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
     const mode = collection.modes.find((m) => m.name === record.modeName);
     if (!mode) continue;
 
-    const ref = parseAliasReference(record.rawValue, record.collectionName)!;
-    const targetCollection = collectionsByName.get(ref.collectionName)
-      ?? (await figma.variables.getLocalVariableCollectionsAsync()).find((c) => c.name === ref.collectionName);
+    const candidates = resolveAliasCandidates(record.rawValue as string, record.collectionName, collectionsByName);
 
-    if (!targetCollection) {
-      summary.warnings.push(
-        `Could not resolve alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): collection "${ref.collectionName}" not found.`
-      );
-      continue;
+    let resolvedTarget: { modeId: string; variable: Variable } | undefined;
+    for (const candidate of candidates) {
+      const targetCollection = collectionsByName.get(candidate.collectionName);
+      const targetModeId = targetCollection?.modes.find((m) => m.name === candidate.modeName)?.modeId;
+      if (!targetCollection || !targetModeId) continue;
+
+      const targetVariable = await findVariableByName(targetCollection, candidate.path);
+      if (targetVariable) {
+        resolvedTarget = { modeId: targetModeId, variable: targetVariable };
+        break;
+      }
     }
 
-    const targetModeName = getMatchingModeName(ref.modeName, targetCollection);
-    const targetModeId = targetCollection.modes.find((m) => m.name === targetModeName)?.modeId;
-
-    const targetVariables = await Promise.all(
-      targetCollection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
-    );
-    const targetVariable = targetVariables.find((v) => v !== null && v.name === ref.path) as Variable | undefined;
-
-    if (!targetVariable || !targetModeId) {
+    if (!resolvedTarget) {
       summary.warnings.push(
-        `Could not resolve alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): variable "${ref.path}" not found in "${ref.collectionName}".`
+        `Could not resolve alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): value "${record.rawValue}" did not match any known collection/mode/variable.`
       );
       continue;
     }
 
     try {
-      variable.setValueForMode(mode.modeId, figma.variables.createVariableAlias(targetVariable));
+      variable.setValueForMode(mode.modeId, figma.variables.createVariableAlias(resolvedTarget.variable));
       summary.aliasesResolved += 1;
       summary.valuesSet += 1;
     } catch (err) {

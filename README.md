@@ -88,6 +88,8 @@ For format selection within the interface:
 
 > **Note:** Only JSON is supported for import — CSV, CSS, and JS aren't reliable round-trip sources for reconstructing variables.
 
+> **Note:** A leading `.` or `_` is Figma's own convention for marking a collection, variable, or group "private" (hidden from publishing) — common in real design systems, not an edge case. Import handles it correctly: linked-variable references are matched against your file's actual collection/mode names rather than blindly split on `.`, and any newly created collection/variable whose name starts with `.` or `_` gets `hiddenFromPublishing` set to match, so the privacy actually carries over. Check the import summary's warnings for anything it couldn't confidently match.
+
 ## Architecture
 
 VarVar is built with a modular architecture for maintainability and scalability:
