@@ -7,6 +7,7 @@ import { ExportJSON } from "./views/ExportJSON";
 import { ExportCSV } from "./views/ExportCSV";
 import { ExportCSS } from "./views/ExportCSS";
 import { ExportJS } from "./views/ExportJS";
+import { ImportJSON } from "./views/ImportJSON";
 
 /**
  * Main App component that routes to format-specific views based on command
@@ -42,6 +43,8 @@ const App: React.FC = () => {
             return <ExportCSS editorType={editorType} />;
         case PluginCommands.EXPORT_JS:
             return <ExportJS editorType={editorType} />;
+        case PluginCommands.IMPORT_JSON:
+            return <ImportJSON editorType={editorType} />;
         case PluginCommands.EXPORT_GENERIC:
         default:
             return <ExportView editorType={editorType} />;

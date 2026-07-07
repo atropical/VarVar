@@ -8,6 +8,7 @@ import { exportToJS } from "./utils/collectionToJS";
 import { toLegacyJSON } from "./utils/legacyJsonConverter";
 import { toLegacyCSV } from "./utils/legacyCsvConverter";
 import { toLegacyJS } from "./utils/legacyJsConverter";
+import { importVariables } from "./utils/importJSON";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile } from "./types.d";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
@@ -111,6 +112,34 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
 }
 
 /**
+ * Handles import requests: parses the uploaded JSON file(s) and recreates
+ * collections, modes, variables and their values (including linked variables)
+ * in the current document.
+ */
+async function handleImport(importFiles: string[], replaceExisting: boolean) {
+    try {
+        const importSummary = await importVariables(importFiles, replaceExisting);
+
+        figma.ui.postMessage({
+            type: MessageTypes.IMPORT_SUCCESS_RESULT,
+            importSummary,
+        } as PluginMessage);
+
+        figma.notify('✅ Variables were imported.');
+    } catch (error) {
+        console.error(error);
+        figma.notify('Something went wrong while attempting to import the variables. Check the console for more info.', {
+            error: true
+        });
+
+        figma.ui.postMessage({
+            type: MessageTypes.IMPORT_ERROR,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+        } as PluginMessage);
+    }
+}
+
+/**
  * Main message handler for plugin communication
  */
 figma.ui.onmessage = async (msg: PluginMessage) => {
@@ -118,7 +147,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         case MessageTypes.GET_BASIC_INFO:
             await handleBasicInfo(msg.command);
             break;
-            
+
         case MessageTypes.EXPORT_SUCCESS:
             if (msg.format) {
                 await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false, msg.useLegacyFormat || false);
@@ -126,7 +155,15 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
                 console.error('Export request missing format');
             }
             break;
-            
+
+        case MessageTypes.IMPORT_REQUEST:
+            if (msg.importFiles && msg.importFiles.length > 0) {
+                await handleImport(msg.importFiles, msg.replaceExisting || false);
+            } else {
+                console.error('Import request missing files');
+            }
+            break;
+
         default:
             console.warn(`Unknown message type: ${msg.type}`);
     }

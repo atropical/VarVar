@@ -75,9 +75,10 @@ export enum OutputFormats {
 export enum PluginCommands {
   EXPORT_GENERIC = "export",
   EXPORT_JSON = "export-json",
-  EXPORT_CSV = "export-csv", 
+  EXPORT_CSV = "export-csv",
   EXPORT_CSS = "export-css",
-  EXPORT_JS = "export-js"
+  EXPORT_JS = "export-js",
+  IMPORT_JSON = "import-json"
 }
 
 /**
@@ -87,11 +88,16 @@ export enum MessageTypes {
   // Info messages
   GET_BASIC_INFO = "INFO.GET_BASIC_INFO",
   BASIC_INFO = "INFO.BASIC_INFO",
-  
+
   // Export messages
   EXPORT_SUCCESS = "EXPORT.SUCCESS",
   EXPORT_SUCCESS_RESULT = "EXPORT.SUCCESS.RESULT",
-  EXPORT_ERROR = "EXPORT.ERROR"
+  EXPORT_ERROR = "EXPORT.ERROR",
+
+  // Import messages
+  IMPORT_REQUEST = "IMPORT.REQUEST",
+  IMPORT_SUCCESS_RESULT = "IMPORT.SUCCESS.RESULT",
+  IMPORT_ERROR = "IMPORT.ERROR"
 }
 
 /**
@@ -102,6 +108,22 @@ export enum MessageTypes {
 export interface ExportFile {
   filename: string;
   content: string;
+}
+
+/**
+ * Summary of an import run: counts of what was created/reused/updated, plus
+ * any non-fatal warnings (unresolved aliases, `_unlinked` entries, mode-limit
+ * errors, type mismatches) collected along the way.
+ */
+export interface ImportSummary {
+  collectionsCreated: number;
+  collectionsReused: number;
+  modesCreated: number;
+  variablesCreated: number;
+  variablesUpdated: number;
+  valuesSet: number;
+  aliasesResolved: number;
+  warnings: string[];
 }
 
 /**
@@ -121,4 +143,7 @@ export interface PluginMessage {
   usedExtendedCollections?: boolean;
   error?: string;
   editorType?: string;
+  importFiles?: string[];
+  replaceExisting?: boolean;
+  importSummary?: ImportSummary;
 }

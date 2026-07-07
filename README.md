@@ -1,10 +1,11 @@
 # VarVar - Figma Variable Export Plugin
 
-VarVar is a Figma plugin that allows you to export your Figma variables to JSON, CSV, CSS, or JavaScript formats, making it easier to integrate your design tokens into your development workflow.
+VarVar is a Figma plugin that allows you to export your Figma variables to JSON, CSV, CSS, or JavaScript formats, and import them back in from JSON, making it easier to integrate your design tokens into your development workflow.
 
 ## Features
 
 - **Multiple Export Formats**: Export Figma variables to JSON, CSV, CSS (vanilla or Tailwind CSS v4), or JavaScript
+- **JSON Import**: Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, with an optional "replace existing variables" mode — see below. CSV/CSS/JS import isn't supported, since those formats aren't reliable round-trip sources.
 - **Format-Specific Menu Commands**: Direct access to each export format from the Figma menu
 - **Linked Variable Support**: Identifies and properly handles linked variables across formats
 - **Scope-Aware Types**: JSON, CSV, and JS exports map variable scopes (`CORNER_RADIUS`, `FONT_WEIGHT`, `OPACITY`, etc.) to DTCG `$type`s instead of exporting bare numbers
@@ -77,6 +78,16 @@ For format selection within the interface:
 
 > **Note:** Programmatically copying is currently not supported by Figma Plugin APIs.
 
+### Import
+
+1. Open your Figma file
+2. Go to **Plugins** → **VarVar** → **Import…**
+3. Choose one or more JSON files previously exported by VarVar (current or legacy format; if you exported an Enterprise extended-collection `.zip`, select its unzipped files together)
+4. Optionally toggle **Replace existing variables** — this deletes *every* existing local variable collection in the file before importing, not just the ones named in the JSON, so you'll be asked to confirm before it runs
+5. Click "Import Variables" — collections, modes, variables, and linked-variable references are recreated, and a summary of what was created/updated (plus any warnings) is shown
+
+> **Note:** Only JSON is supported for import — CSV, CSS, and JS aren't reliable round-trip sources for reconstructing variables.
+
 ## Architecture
 
 VarVar is built with a modular architecture for maintainability and scalability:
@@ -100,21 +111,28 @@ src/
 │   ├── ExportButton.tsx
 │   ├── OutputPreview.tsx
 │   ├── ExportOptions.tsx
+│   ├── FileImportInput.tsx    # File picker for JSON import
+│   ├── ImportOptions.tsx      # "Replace existing variables" toggle
+│   ├── ConfirmReplaceDialog.tsx  # Confirmation for the replace-existing import path
+│   ├── ImportSummaryPanel.tsx # Import result counts and warnings
 │   └── Footer.tsx
 ├── hooks/              # Custom React hooks
-│   └── useExportData.ts    # Hook for managing export data and state
-├── views/              # Format-specific export views
+│   ├── useExportData.ts    # Hook for managing export data and state
+│   └── useImportData.ts    # Hook for managing import data and state
+├── views/              # Format-specific export/import views
 │   ├── ExportView.tsx      # Generic export with format selector
 │   ├── ExportJSON.tsx
 │   ├── ExportCSV.tsx
 │   ├── ExportCSS.tsx
-│   └── ExportJS.tsx
-├── utils/              # Export processing utilities
+│   ├── ExportJS.tsx
+│   └── ImportJSON.tsx      # JSON import view
+├── utils/              # Export/import processing utilities
 │   ├── collectionToJSON.ts
 │   ├── collectionToCSV.ts
 │   ├── collectionToCSS.ts
 │   ├── collectionToJS.ts
 │   ├── collectionToTailwind.ts
+│   ├── importJSON.ts       # Parses exported JSON and recreates variables in Figma
 │   ├── clipboard.ts
 │   ├── color.ts
 │   └── stringTransformation.ts
