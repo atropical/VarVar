@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { Flex, Text, Button, Link } from "figma-kit";
 import { copyToClipboard } from "../utils/clipboard";
-import { ExportFile } from "../types.d";
+import { renderCodeLines } from "../utils/highlightCode";
+import { ExportFile, OutputFormats } from "../types.d";
 
 interface OutputPreviewProps {
     exportedData: string;
     files?: ExportFile[] | null;
     usedExtendedCollections?: boolean;
     editorType?: string;
+    format?: OutputFormats;
     onSelectToCopy: () => void;
 }
 
@@ -20,6 +22,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     files,
     usedExtendedCollections = false,
     editorType = 'dev',
+    format,
     onSelectToCopy
 }) => {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -45,7 +48,16 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
     if (!activeContent) return null;
 
     return (
-        <Flex direction="column" gap="2" style={{ flex: "2 0 300px", maxWidth: editorType === 'design' ? "454px" : undefined }}>
+        <Flex
+            direction="column"
+            gap="2"
+            style={{
+                flex: "2 1 300px",
+                minWidth: 0,
+                minHeight: 0,
+                maxWidth: editorType === 'design' ? "454px" : "100%",
+            }}
+        >
             <Text>Code Preview</Text>
             {usedExtendedCollections && (
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
@@ -78,11 +90,16 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                     borderRadius: 4,
                     padding: 8,
                     backgroundColor: 'rgba(0,0,0,.25)',
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    flex: '1 1 auto',
+                    minHeight: 0,
                 }}
             >
-                <Flex direction="column">
-                    <Flex 
-                        direction="row" 
+                <Flex direction="column" style={{ minWidth: 0, maxWidth: '100%', flex: 1, minHeight: 0 }}>
+                    <Flex
+                        direction="row"
                         gap="2"
                         style={{
                             alignSelf: 'end',
@@ -97,7 +114,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                             onClick={handleCopy}
                             disabled={copyStatus !== 'idle'}
                         >
-                            {copyStatus === 'success' ? '✓ Copied!' : 
+                            {copyStatus === 'success' ? '✓ Copied!' :
                              copyStatus === 'error' ? '✗ Failed' : 'Copy'}
                         </Button>
                         <Button
@@ -107,14 +124,31 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                             Select Result
                         </Button>
                     </Flex>
-                    <Text style={{ marginTop: '-2rem' }}>
+                    <Text
+                        style={{
+                            marginTop: '-2rem',
+                            display: 'flex',
+                            flex: 1,
+                            minHeight: 0,
+                        }}
+                    >
                         <pre
+                            key={activeFileIndex}
                             id="varvar-exported-output"
-                            style={{ overflow: 'auto' }}
+                            style={{
+                                flex: 1,
+                                minHeight: 0,
+                                overflowX: 'auto',
+                                overflowY: 'auto',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
+                                margin: 0,
+                            }}
                             contentEditable
                             spellCheck="false"
+                            suppressContentEditableWarning
                         >
-                            {activeContent.toString()}
+                            {renderCodeLines(activeContent.toString(), format)}
                         </pre>
                     </Text>
                 </Flex>

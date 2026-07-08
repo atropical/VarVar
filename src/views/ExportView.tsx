@@ -121,9 +121,10 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
     );
 
     const preview = seeOutput && exportedData ? (
-        <OutputPreview 
+        <OutputPreview
             exportedData={exportedData}
             editorType={editorType}
+            format={format}
             onSelectToCopy={handleSelectToCopy}
         />
     ) : null;

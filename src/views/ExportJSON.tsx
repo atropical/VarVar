@@ -70,6 +70,7 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
             files={exportedFiles}
             usedExtendedCollections={usedExtendedCollections}
             editorType={editorType}
+            format={format}
             onSelectToCopy={handleSelectToCopy}
         />
     ) : null;
