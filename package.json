@@ -1,6 +1,6 @@
 {
   "name": "varvar",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "VarVar is a Figma plugin that export variables to different formats.",
   "main": "dist/code.js",
   "type": "module",
