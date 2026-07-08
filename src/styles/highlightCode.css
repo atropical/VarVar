@@ -1,0 +1,91 @@
+.vv-tok-key,
+.vv-tok-property,
+.vv-tok-selector {
+    color: #9cdcfe;
+}
+
+.vv-tok-string {
+    color: #ce9178;
+}
+
+.vv-tok-number {
+    color: #b5cea8;
+}
+
+.vv-tok-boolean {
+    color: #569cd6;
+}
+
+.vv-tok-keyword,
+.vv-tok-atrule {
+    color: #c586c0;
+}
+
+.vv-tok-comment {
+    color: #6a9955;
+    font-style: italic;
+}
+
+.vv-tok-punctuation {
+    color: var(--figma-color-text-secondary);
+}
+
+.vv-tok-hex {
+    color: #4fc1ff;
+}
+
+.vv-tok-function {
+    color: #dcdcaa;
+}
+
+.vv-tok-identifier {
+    color: inherit;
+}
+
+.vv-line {
+    display: flex;
+    white-space: pre;
+}
+
+.vv-line-number {
+    flex: none;
+    min-width: 2.5em;
+    margin-right: 1em;
+    padding-right: 0.25em;
+    text-align: right;
+    color: var(--figma-color-text-tertiary, var(--figma-color-text-secondary));
+    opacity: 0.5;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
+.vv-line-content {
+    flex: 1 1 auto;
+    white-space: pre;
+}
+
+#varvar-exported-output {
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    scrollbar-width: thin;
+}
+
+#varvar-exported-output::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+#varvar-exported-output::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#varvar-exported-output::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+#varvar-exported-output::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}

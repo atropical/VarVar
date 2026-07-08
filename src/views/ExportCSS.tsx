@@ -68,6 +68,7 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
             exportedData={exportedData}
             usedExtendedCollections={usedExtendedCollections}
             editorType={editorType}
+            format={format}
             onSelectToCopy={handleSelectToCopy}
         />
     ) : null;

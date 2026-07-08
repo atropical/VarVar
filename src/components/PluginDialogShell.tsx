@@ -16,17 +16,19 @@ export const PluginDialogShell: React.FC<PluginDialogShellProps> = ({
     showFooter = true 
 }) => {
     return (
-        <Flex 
-            direction="column" 
+        <Flex
+            direction="column"
             gap="4"
-            justify="between"
             style={{
                 padding: "1rem",
                 boxSizing: "border-box",
                 minHeight: "100%",
+                flex: 1,
             }}
         >
-            {children}
+            <Flex direction="column" gap="4" style={{ flex: 1, minHeight: 0 }}>
+                {children}
+            </Flex>
             {showFooter && <Footer />}
         </Flex>
     );

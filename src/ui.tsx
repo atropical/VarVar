@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "figma-kit/styles.css";
+import "./styles/highlightCode.css";
 import { PluginCommands, MessageTypes, PluginMessage } from "./types.d";
 import { ExportView } from "./views/ExportView";
 import { ExportJSON } from "./views/ExportJSON";

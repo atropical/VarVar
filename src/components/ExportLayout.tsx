@@ -22,16 +22,18 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
     if (isDesignMode) {
         // Horizontal layout for Design mode
         return (
-            <Flex 
-                direction="row" 
+            <Flex
+                direction="row"
                 gap="4"
                 style={{
                     position: "relative",
+                    flex: 1,
+                    minHeight: 0,
                 }}
             >
                 {/* Form controls on the left */}
-                <Flex 
-                    direction="column" 
+                <Flex
+                    direction="column"
                     gap="4"
                     style={{
                         flex: "1 1 200px",
@@ -44,7 +46,7 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
                 >
                     {children}
                 </Flex>
-                
+
                 {/* Preview on the right - takes remaining space and full height */}
                 {preview}
             </Flex>
@@ -53,7 +55,7 @@ export const ExportLayout: React.FC<ExportLayoutProps> = ({
 
     // Vertical layout for Dev mode (default)
     return (
-        <Flex direction="column" gap="4">
+        <Flex direction="column" gap="4" style={{ flex: 1, minHeight: 0 }}>
             {children}
             {preview}
         </Flex>
