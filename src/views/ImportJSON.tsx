@@ -14,16 +14,17 @@ interface ImportJSONProps {
 
 /**
  * JSON import view: pick a previously-exported VarVar JSON file (or files),
- * optionally replace all existing variables, and recreate collections,
- * modes, variables and linked-variable references in the document.
+ * choose how to reconcile against existing variables (merge, merge + prune,
+ * or clean), and recreate collections, modes, variables and linked-variable
+ * references in the document.
  */
 export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
     const {
         fileNames,
         fileContents,
         setFiles,
-        replaceExisting,
-        setReplaceExisting,
+        importMode,
+        setImportMode,
         confirmDialogOpen,
         setConfirmDialogOpen,
         isImporting,
@@ -47,8 +48,8 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
             <FileImportInput fileNames={fileNames} onFilesSelected={setFiles} />
 
             <ImportOptions
-                replaceExisting={replaceExisting}
-                onReplaceExistingChange={setReplaceExisting}
+                importMode={importMode}
+                onImportModeChange={setImportMode}
             />
 
             <Button
@@ -90,6 +91,7 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
 
             <ConfirmReplaceDialog
                 open={confirmDialogOpen}
+                mode={importMode}
                 onOpenChange={setConfirmDialogOpen}
                 onConfirm={handleConfirmReplace}
             />

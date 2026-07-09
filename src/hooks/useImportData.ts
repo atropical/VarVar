@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { MessageTypes, ImportSummary } from "../types.d";
+import { MessageTypes, ImportSummary, ImportMode } from "../types.d";
 
 interface UseImportDataReturn {
     fileNames: string[];
     fileContents: string[];
     setFiles: (fileNames: string[], fileContents: string[]) => void;
-    replaceExisting: boolean;
-    setReplaceExisting: (replaceExisting: boolean) => void;
+    importMode: ImportMode;
+    setImportMode: (importMode: ImportMode) => void;
     confirmDialogOpen: boolean;
     setConfirmDialogOpen: (open: boolean) => void;
     isImporting: boolean;
@@ -24,7 +24,7 @@ interface UseImportDataReturn {
 export const useImportData = (): UseImportDataReturn => {
     const [fileNames, setFileNames] = useState<string[]>([]);
     const [fileContents, setFileContents] = useState<string[]>([]);
-    const [replaceExisting, setReplaceExisting] = useState<boolean>(false);
+    const [importMode, setImportMode] = useState<ImportMode>(ImportMode.MERGE);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState<boolean>(false);
     const [isImporting, setIsImporting] = useState<boolean>(false);
     const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
@@ -45,7 +45,7 @@ export const useImportData = (): UseImportDataReturn => {
             pluginMessage: {
                 type: MessageTypes.IMPORT_REQUEST,
                 importFiles: fileContents,
-                replaceExisting
+                importMode
             }
         }, "*");
     };
@@ -53,7 +53,9 @@ export const useImportData = (): UseImportDataReturn => {
     const handleImportClick = () => {
         if (fileContents.length === 0) return;
 
-        if (replaceExisting) {
+        // Only Sync and Clean ever delete anything — Merge and Update only
+        // don't need a confirmation gate.
+        if (importMode === ImportMode.SYNC || importMode === ImportMode.CLEAN) {
             setConfirmDialogOpen(true);
         } else {
             sendImportRequest();
@@ -81,8 +83,8 @@ export const useImportData = (): UseImportDataReturn => {
         fileNames,
         fileContents,
         setFiles,
-        replaceExisting,
-        setReplaceExisting,
+        importMode,
+        setImportMode,
         confirmDialogOpen,
         setConfirmDialogOpen,
         isImporting,

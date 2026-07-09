@@ -30,12 +30,15 @@ export const ImportSummaryPanel: React.FC<ImportSummaryPanelProps> = ({ summary,
             >
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
                     Collections: {summary.collectionsCreated} created, {summary.collectionsReused} reused
+                    {summary.collectionsDeleted > 0 && `, ${summary.collectionsDeleted} deleted`}
                 </Text>
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
-                    Modes created: {summary.modesCreated}
+                    Modes: {summary.modesCreated} created
+                    {summary.modesDeleted > 0 && `, ${summary.modesDeleted} deleted`}
                 </Text>
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
                     Variables: {summary.variablesCreated} created, {summary.variablesUpdated} updated
+                    {summary.variablesDeleted > 0 && `, ${summary.variablesDeleted} deleted`}
                 </Text>
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
                     Values set: {summary.valuesSet} ({summary.aliasesResolved} linked variables)
