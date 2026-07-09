@@ -111,16 +111,34 @@ export interface ExportFile {
 }
 
 /**
- * Summary of an import run: counts of what was created/reused/updated, plus
- * any non-fatal warnings (unresolved aliases, `_unlinked` entries, mode-limit
- * errors, type mismatches) collected along the way.
+ * How an import reconciles the imported file(s) against the document's
+ * existing local variable collections.
+ */
+export enum ImportMode {
+  /** Additive: create missing collections/modes/variables, update matches by name. Nothing is ever deleted. */
+  MERGE = "merge",
+  /** Touch only what already exists in both the file and the document (update values/description/scopes on matches). Nothing is created and nothing is deleted. */
+  UPDATE_ONLY = "update-only",
+  /** Merge (create + update), then delete any variable, mode, or whole collection anywhere in the document that isn't present in the imported file. */
+  SYNC = "sync",
+  /** Delete every existing local variable collection first, then import fresh — a full, clean re-sync. */
+  CLEAN = "clean",
+}
+
+/**
+ * Summary of an import run: counts of what was created/reused/updated/deleted,
+ * plus any non-fatal warnings (unresolved aliases, `_unlinked` entries,
+ * mode-limit errors, type mismatches) collected along the way.
  */
 export interface ImportSummary {
   collectionsCreated: number;
   collectionsReused: number;
+  collectionsDeleted: number;
   modesCreated: number;
+  modesDeleted: number;
   variablesCreated: number;
   variablesUpdated: number;
+  variablesDeleted: number;
   valuesSet: number;
   aliasesResolved: number;
   warnings: string[];
@@ -144,6 +162,6 @@ export interface PluginMessage {
   error?: string;
   editorType?: string;
   importFiles?: string[];
-  replaceExisting?: boolean;
+  importMode?: ImportMode;
   importSummary?: ImportSummary;
 }

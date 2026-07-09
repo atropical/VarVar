@@ -9,7 +9,7 @@ import { toLegacyJSON } from "./utils/legacyJsonConverter";
 import { toLegacyCSV } from "./utils/legacyCsvConverter";
 import { toLegacyJS } from "./utils/legacyJsConverter";
 import { importVariables } from "./utils/importJSON";
-import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile } from "./types.d";
+import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile, ImportMode } from "./types.d";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
 
@@ -116,9 +116,9 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
  * collections, modes, variables and their values (including linked variables)
  * in the current document.
  */
-async function handleImport(importFiles: string[], replaceExisting: boolean) {
+async function handleImport(importFiles: string[], importMode: ImportMode) {
     try {
-        const importSummary = await importVariables(importFiles, replaceExisting);
+        const importSummary = await importVariables(importFiles, importMode);
 
         figma.ui.postMessage({
             type: MessageTypes.IMPORT_SUCCESS_RESULT,
@@ -158,7 +158,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
         case MessageTypes.IMPORT_REQUEST:
             if (msg.importFiles && msg.importFiles.length > 0) {
-                await handleImport(msg.importFiles, msg.replaceExisting || false);
+                await handleImport(msg.importFiles, msg.importMode || ImportMode.MERGE);
             } else {
                 console.error('Import request missing files');
             }

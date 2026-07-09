@@ -1,4 +1,5 @@
 import { cssColorToRgba } from "./color";
+import { ImportMode } from "../types.d";
 import type { ImportSummary } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -237,16 +238,20 @@ function parseLiteralValue(
  * convention back into real Figma variable aliases.
  *
  * @param rawFiles - Raw JSON text of each selected file
- * @param replaceExisting - If true, every existing local variable collection
- *   is deleted before importing (a clean re-sync instead of an additive merge)
+ * @param importMode - How to reconcile the import against existing local
+ *   collections: additive merge, update-existing-only, merge-then-prune
+ *   (sync), or wipe-then-import (clean). See {@link ImportMode}.
  */
-export async function importVariables(rawFiles: string[], replaceExisting: boolean): Promise<ImportSummary> {
+export async function importVariables(rawFiles: string[], importMode: ImportMode): Promise<ImportSummary> {
   const summary: ImportSummary = {
     collectionsCreated: 0,
     collectionsReused: 0,
+    collectionsDeleted: 0,
     modesCreated: 0,
+    modesDeleted: 0,
     variablesCreated: 0,
     variablesUpdated: 0,
+    variablesDeleted: 0,
     valuesSet: 0,
     aliasesResolved: 0,
     warnings: [],
@@ -260,10 +265,11 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
     return summary;
   }
 
-  if (replaceExisting) {
+  if (importMode === ImportMode.CLEAN) {
     const existing = await figma.variables.getLocalVariableCollectionsAsync();
     for (const collection of existing) {
       collection.remove();
+      summary.collectionsDeleted += 1;
     }
   }
 
@@ -286,7 +292,13 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
   for (const [collectionName, modeNames] of modeNamesByCollection) {
     let collection = collectionsByName.get(collectionName);
     let isNewCollection = false;
+
     if (!collection) {
+      // Update-only never creates: a collection missing locally means every
+      // record under it is skipped entirely (handled by the `!collection`
+      // guards in phases 2/3 below).
+      if (importMode === ImportMode.UPDATE_ONLY) continue;
+
       collection = figma.variables.createVariableCollection(collectionName);
       if (hasPrivateNamingConvention(collectionName)) {
         collection.hiddenFromPublishing = true;
@@ -301,6 +313,7 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
     modeNames.forEach((modeName, index) => {
       const existingMode = collection!.modes.find((m) => m.name === modeName);
       if (existingMode) return;
+      if (importMode === ImportMode.UPDATE_ONLY) return;
 
       if (isNewCollection && index === 0) {
         // Rename the collection's auto-created default mode instead of adding a new one.
@@ -346,6 +359,9 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
       variable = existingVariable;
       summary.variablesUpdated += 1;
     } else {
+      // Update-only never creates a variable that doesn't already exist.
+      if (importMode === ImportMode.UPDATE_ONLY) continue;
+
       variable = figma.variables.createVariable(varName, collection, record.resolvedType);
       if (hasPrivateNamingConvention(varName)) {
         variable.hiddenFromPublishing = true;
@@ -433,6 +449,51 @@ export async function importVariables(rawFiles: string[], replaceExisting: boole
       summary.warnings.push(
         `Failed to set alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
       );
+    }
+  }
+
+  // --- Phase 4: prune (SYNC only) — after merging, delete anything anywhere
+  // in the document that isn't present in the imported file: whole
+  // collections the file never mentions, and leftover variables/modes inside
+  // collections it does mention.
+  if (importMode === ImportMode.SYNC) {
+    for (const collection of collectionsByName.values()) {
+      const modeNames = modeNamesByCollection.get(collection.name);
+
+      if (!modeNames) {
+        // Not present in the file at all — delete the whole collection.
+        collection.remove();
+        summary.collectionsDeleted += 1;
+        continue;
+      }
+
+      const keptVariableNames = new Set(
+        records
+          .filter((record) => record.collectionName === collection.name)
+          .map((record) => record.pathParts.join("/"))
+      );
+
+      const existingVariables = await Promise.all(
+        collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
+      );
+      for (const variable of existingVariables) {
+        if (variable && !keptVariableNames.has(variable.name)) {
+          variable.remove();
+          summary.variablesDeleted += 1;
+        }
+      }
+
+      for (const mode of collection.modes) {
+        if (modeNames.includes(mode.name)) continue;
+        try {
+          collection.removeMode(mode.modeId);
+          summary.modesDeleted += 1;
+        } catch (err) {
+          summary.warnings.push(
+            `Could not remove mode "${mode.name}" from collection "${collection.name}": ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
     }
   }
 
