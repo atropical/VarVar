@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { Flex, Text, Button } from "figma-kit";
+import { Flex, Text } from "figma-kit";
 import type { ImportDiff, ImportDiffVariable, ImportSummary } from "../types.d";
 
 interface ImportDiffPreviewProps {
     diff: ImportDiff;
     summary: ImportSummary;
-    isImporting: boolean;
     editorType?: string;
-    onBack: () => void;
-    onConfirm: () => void;
 }
 
 const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
@@ -71,17 +68,14 @@ const FilterChip: React.FC<{ label: string; count: number; active: boolean; onTo
 /**
  * Shows the itemized dry-run diff computed by `previewImport` — nothing in
  * the document has changed yet. The user reviews collection/mode/variable
- * creates, updates and deletes (with per-mode before → after values) and
- * either goes back to adjust the file/options, or confirms to actually
- * run the import.
+ * creates, updates and deletes (with per-mode before → after values); the
+ * actual Confirm import / Change (discard preview) actions live in the
+ * form controls column so there's a single, consistently-sized action area.
  */
 export const ImportDiffPreview: React.FC<ImportDiffPreviewProps> = ({
     diff,
     summary,
-    isImporting,
     editorType = "dev",
-    onBack,
-    onConfirm,
 }) => {
     const changedCollections = diff.collections.filter((c) => c.action !== "reuse");
     const hasStructuralChanges = changedCollections.length > 0 || diff.modes.length > 0 || diff.variables.length > 0;
@@ -222,15 +216,6 @@ export const ImportDiffPreview: React.FC<ImportDiffPreviewProps> = ({
                     </Flex>
                 </details>
             )}
-
-            <Flex gap="2">
-                <Button variant="secondary" style={{ flex: 1, minWidth: 0 }} onClick={onBack} disabled={isImporting}>
-                    Back
-                </Button>
-                <Button variant="primary" style={{ flex: 1, minWidth: 0 }} onClick={onConfirm} disabled={isImporting}>
-                    {isImporting ? "Importing…" : "Confirm import"}
-                </Button>
-            </Flex>
         </Flex>
     );
 };

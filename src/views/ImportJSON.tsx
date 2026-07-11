@@ -61,15 +61,38 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
                 disabled={previewDiff !== null}
             />
 
-            <Button
-                variant="primary"
-                fullWidth={true}
-                size="medium"
-                disabled={fileContents.length === 0 || isPreviewing}
-                onClick={handlePreviewClick}
-            >
-                {isPreviewing ? "Computing preview…" : "Preview import"}
-            </Button>
+            {previewDiff ? (
+                <Flex direction="column" gap="2">
+                    <Button
+                        variant="primary"
+                        fullWidth={true}
+                        size="medium"
+                        disabled={isImporting}
+                        onClick={handleConfirmImportClick}
+                    >
+                        {isImporting ? "Importing…" : "Confirm import"}
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        fullWidth={true}
+                        size="medium"
+                        disabled={isImporting}
+                        onClick={handleDiscardPreview}
+                    >
+                        Change
+                    </Button>
+                </Flex>
+            ) : (
+                <Button
+                    variant="primary"
+                    fullWidth={true}
+                    size="medium"
+                    disabled={fileContents.length === 0 || isPreviewing}
+                    onClick={handlePreviewClick}
+                >
+                    {isPreviewing ? "Computing preview…" : "Preview import"}
+                </Button>
+            )}
 
             {importError && (
                 <Flex style={{
@@ -92,10 +115,7 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
         <ImportDiffPreview
             diff={previewDiff}
             summary={previewSummary}
-            isImporting={isImporting}
             editorType={editorType}
-            onBack={handleDiscardPreview}
-            onConfirm={handleConfirmImportClick}
         />
     ) : null;
 
