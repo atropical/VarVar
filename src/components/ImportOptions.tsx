@@ -5,6 +5,7 @@ import { ImportMode } from "../types.d";
 interface ImportOptionsProps {
     importMode: ImportMode;
     onImportModeChange: (importMode: ImportMode) => void;
+    disabled?: boolean;
 }
 
 /**
@@ -18,7 +19,8 @@ interface ImportOptionsProps {
  */
 export const ImportOptions: React.FC<ImportOptionsProps> = ({
     importMode,
-    onImportModeChange
+    onImportModeChange,
+    disabled = false
 }) => {
     return (
         <Flex gap="2" direction="column">
@@ -26,9 +28,16 @@ export const ImportOptions: React.FC<ImportOptionsProps> = ({
                 Options
             </Label>
 
+            {disabled && (
+                <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
+                    Locked while a preview is shown — click Back to change these.
+                </Text>
+            )}
+
             <RadioGroup.Root
                 orientation="vertical"
                 value={importMode}
+                disabled={disabled}
                 onValueChange={(value) => onImportModeChange(value as ImportMode)}
             >
                 <RadioGroup.Label>
