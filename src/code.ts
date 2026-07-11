@@ -8,7 +8,7 @@ import { exportToJS } from "./utils/collectionToJS";
 import { toLegacyJSON } from "./utils/legacyJsonConverter";
 import { toLegacyCSV } from "./utils/legacyCsvConverter";
 import { toLegacyJS } from "./utils/legacyJsConverter";
-import { importVariables } from "./utils/importJSON";
+import { importVariables, previewImport } from "./utils/importJSON";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile, ImportMode } from "./types.d";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
@@ -112,6 +112,32 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
 }
 
 /**
+ * Handles import preview requests: computes what an import would do without
+ * touching the document, so the UI can show a diff before the user confirms.
+ */
+async function handleImportPreview(importFiles: string[], importMode: ImportMode) {
+    try {
+        const { summary, diff } = await previewImport(importFiles, importMode);
+
+        figma.ui.postMessage({
+            type: MessageTypes.IMPORT_PREVIEW_RESULT,
+            importSummary: summary,
+            importDiff: diff,
+        } as PluginMessage);
+    } catch (error) {
+        console.error(error);
+        figma.notify('Something went wrong while previewing the import. Check the console for more info.', {
+            error: true
+        });
+
+        figma.ui.postMessage({
+            type: MessageTypes.IMPORT_ERROR,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+        } as PluginMessage);
+    }
+}
+
+/**
  * Handles import requests: parses the uploaded JSON file(s) and recreates
  * collections, modes, variables and their values (including linked variables)
  * in the current document.
@@ -153,6 +179,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
                 await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false, msg.useLegacyFormat || false);
             } else {
                 console.error('Export request missing format');
+            }
+            break;
+
+        case MessageTypes.IMPORT_PREVIEW_REQUEST:
+            if (msg.importFiles && msg.importFiles.length > 0) {
+                await handleImportPreview(msg.importFiles, msg.importMode || ImportMode.MERGE);
+            } else {
+                console.error('Import preview request missing files');
             }
             break;
 

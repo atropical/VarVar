@@ -6,6 +6,7 @@ import { FileImportInput } from "../components/FileImportInput";
 import { ImportOptions } from "../components/ImportOptions";
 import { ConfirmReplaceDialog } from "../components/ConfirmReplaceDialog";
 import { ImportSummaryPanel } from "../components/ImportSummaryPanel";
+import { ImportDiffPreview } from "../components/ImportDiffPreview";
 import { useImportData } from "../hooks/useImportData";
 
 interface ImportJSONProps {
@@ -15,7 +16,8 @@ interface ImportJSONProps {
 /**
  * JSON import view: pick a previously-exported VarVar JSON file (or files),
  * choose how to reconcile against existing variables (merge, merge + prune,
- * or clean), and recreate collections, modes, variables and linked-variable
+ * or clean), preview a dry-run diff of exactly what would change, and only
+ * then confirm to recreate collections, modes, variables and linked-variable
  * references in the document.
  */
 export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
@@ -27,10 +29,16 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
         setImportMode,
         confirmDialogOpen,
         setConfirmDialogOpen,
+        isPreviewing,
+        previewDiff,
+        previewSummary,
+        previewedImportMode,
         isImporting,
         importSummary,
         importError,
-        handleImportClick,
+        handlePreviewClick,
+        handleDiscardPreview,
+        handleConfirmImportClick,
         handleConfirmReplace
     } = useImportData();
 
@@ -50,17 +58,41 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
             <ImportOptions
                 importMode={importMode}
                 onImportModeChange={setImportMode}
+                disabled={previewDiff !== null}
             />
 
-            <Button
-                variant="primary"
-                fullWidth={true}
-                size="medium"
-                disabled={fileContents.length === 0 || isImporting}
-                onClick={handleImportClick}
-            >
-                {isImporting ? "Importing…" : "Import Variables"}
-            </Button>
+            {previewDiff ? (
+                <Flex direction="column" gap="2">
+                    <Button
+                        variant="primary"
+                        fullWidth={true}
+                        size="medium"
+                        disabled={isImporting}
+                        onClick={handleConfirmImportClick}
+                    >
+                        {isImporting ? "Importing…" : "Confirm import"}
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        fullWidth={true}
+                        size="medium"
+                        disabled={isImporting}
+                        onClick={handleDiscardPreview}
+                    >
+                        Change
+                    </Button>
+                </Flex>
+            ) : (
+                <Button
+                    variant="primary"
+                    fullWidth={true}
+                    size="medium"
+                    disabled={fileContents.length === 0 || isPreviewing}
+                    onClick={handlePreviewClick}
+                >
+                    {isPreviewing ? "Computing preview…" : "Preview import"}
+                </Button>
+            )}
 
             {importError && (
                 <Flex style={{
@@ -79,6 +111,12 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
 
     const preview = importSummary ? (
         <ImportSummaryPanel summary={importSummary} editorType={editorType} />
+    ) : previewDiff && previewSummary ? (
+        <ImportDiffPreview
+            diff={previewDiff}
+            summary={previewSummary}
+            editorType={editorType}
+        />
     ) : null;
 
     return (
@@ -91,7 +129,7 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
 
             <ConfirmReplaceDialog
                 open={confirmDialogOpen}
-                mode={importMode}
+                mode={previewedImportMode ?? importMode}
                 onOpenChange={setConfirmDialogOpen}
                 onConfirm={handleConfirmReplace}
             />

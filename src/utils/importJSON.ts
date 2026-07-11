@@ -1,6 +1,6 @@
-import { cssColorToRgba } from "./color";
+import { cssColorToRgba, rgbToCssColor } from "./color";
 import { ImportMode } from "../types.d";
-import type { ImportSummary } from "../types.d";
+import type { ImportSummary, ImportDiff, ImportDiffVariable } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
 
@@ -164,7 +164,7 @@ function splitOnKnownName(body: string, names: string[]): { name: string; rest: 
 function resolveAliasCandidates(
   value: string,
   currentCollectionName: string,
-  collectionsByName: Map<string, VariableCollection>
+  collectionRefsByName: Map<string, CollectionRef>
 ): AliasTarget[] {
   const remainder = value.slice(2);
   const candidates: AliasTarget[] = [];
@@ -172,11 +172,11 @@ function resolveAliasCandidates(
   // Explicit "$.Collection.Mode.path" form — tried first since matching an
   // actual known collection name is stronger evidence than the generic
   // same-collection fallback below.
-  const collectionNames = [...collectionsByName.keys()].sort((a, b) => b.length - a.length);
+  const collectionNames = [...collectionRefsByName.keys()].sort((a, b) => b.length - a.length);
   for (const collectionName of collectionNames) {
     if (!remainder.startsWith(`${collectionName}.`)) continue;
     const rest = remainder.slice(collectionName.length + 1);
-    const split = splitOnKnownName(rest, collectionsByName.get(collectionName)!.modes.map((m) => m.name));
+    const split = splitOnKnownName(rest, collectionRefsByName.get(collectionName)!.modes.map((m) => m.name));
     if (split) {
       candidates.push({ collectionName, modeName: split.name, path: split.rest.replace(/\./g, "/") });
     }
@@ -184,7 +184,7 @@ function resolveAliasCandidates(
 
   // Same-collection "$..Mode.path" form (empty collection segment).
   if (remainder.startsWith(".")) {
-    const currentCollection = collectionsByName.get(currentCollectionName);
+    const currentCollection = collectionRefsByName.get(currentCollectionName);
     if (currentCollection) {
       const split = splitOnKnownName(remainder.slice(1), currentCollection.modes.map((m) => m.name));
       if (split) {
@@ -231,18 +231,94 @@ function parseLiteralValue(
   }
 }
 
+function isAliasStoredValue(value: VariableValue | undefined): value is VariableAlias {
+  return typeof value === "object" && value !== null && (value as VariableAlias).type === "VARIABLE_ALIAS";
+}
+
+function formatLiteral(value: VariableValue, type: VariableResolvedDataType): string {
+  if (type === "COLOR") return rgbToCssColor(value as RGBA);
+  return String(value);
+}
+
+/** Renders a stored (pre-existing) variable value for diff display, resolving alias targets by name. */
+async function formatStoredValue(value: VariableValue | undefined, type: VariableResolvedDataType): Promise<string | undefined> {
+  if (value === undefined) return undefined;
+  if (isAliasStoredValue(value)) {
+    const target = await figma.variables.getVariableByIdAsync(value.id);
+    return target ? `→ ${target.name}` : "→ (broken alias)";
+  }
+  return formatLiteral(value, type);
+}
+
 /**
- * Imports a set of previously-exported VarVar JSON files into the current
- * Figma document: recreates collections, modes and variables, sets literal
- * values, and resolves the plugin's `$.Collection.Mode.path` alias-reference
- * convention back into real Figma variable aliases.
- *
- * @param rawFiles - Raw JSON text of each selected file
- * @param importMode - How to reconcile the import against existing local
- *   collections: additive merge, update-existing-only, merge-then-prune
- *   (sync), or wipe-then-import (clean). See {@link ImportMode}.
+ * Whether an existing stored value already equals the literal value about to
+ * be imported. `after` always came from parsing an exported file, so for
+ * COLOR it can never be more precise than the export format's own
+ * quantization (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for
+ * alpha) — comparing at full float precision against a native Figma color
+ * (which isn't necessarily on that grid) would report a "change" on every
+ * re-import of a file exported by this same plugin. Both sides are rounded
+ * to that grid before comparing, so only a color that's actually different
+ * once round-tripped through the export format counts as changed.
  */
-export async function importVariables(rawFiles: string[], importMode: ImportMode): Promise<ImportSummary> {
+function literalValueEquals(before: VariableValue | undefined, after: VariableValue, type: VariableResolvedDataType): boolean {
+  if (before === undefined || isAliasStoredValue(before)) return false;
+  if (type === "COLOR") {
+    const a = before as RGBA;
+    const b = after as RGBA;
+    const ch = (n: number) => Math.round(n * 255);
+    const alpha = (n: number) => Math.round(n * 100);
+    return ch(a.r) === ch(b.r) && ch(a.g) === ch(b.g) && ch(a.b) === ch(b.b) && alpha(a.a) === alpha(b.a);
+  }
+  return before === after;
+}
+
+/** Whether an existing stored value is already an alias pointing at `targetId`. */
+function aliasValueEquals(before: VariableValue | undefined, targetId: string | undefined): boolean {
+  if (!targetId || !isAliasStoredValue(before)) return false;
+  return before.id === targetId;
+}
+
+function scopesEqual(a: VariableScope[], b: VariableScope[]): boolean {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b);
+  return a.every((s) => setB.has(s));
+}
+
+interface ModeRef {
+  modeId: string;
+  name: string;
+  isNew: boolean;
+}
+
+interface CollectionRef {
+  name: string;
+  real?: VariableCollection;
+  isNew: boolean;
+  modes: ModeRef[];
+}
+
+interface VariableRef {
+  path: string;
+  collectionName: string;
+  real?: Variable;
+  isNew: boolean;
+  resolvedType: VariableResolvedDataType;
+}
+
+function syntheticModeId(collectionName: string, modeName: string): string {
+  return `new:${collectionName}:${modeName}`;
+}
+
+/**
+ * Core import walk shared by dry-run preview and real execution. When
+ * `dryRun` is true, every `figma.variables.*` mutation call is skipped —
+ * only read APIs run — while the exact same decisions (what would be
+ * created/updated/deleted) are still recorded into `diff` and `summary`.
+ * This guarantees the preview a user sees and the run they confirm can
+ * never drift apart, since it's the same code path either way.
+ */
+async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boolean): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
   const summary: ImportSummary = {
     collectionsCreated: 0,
     collectionsReused: 0,
@@ -257,31 +333,41 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
     warnings: [],
   };
 
+  const diff: ImportDiff = { collections: [], modes: [], variables: [] };
+
   const { records, warnings: parseWarnings } = collectRecords(rawFiles);
   summary.warnings.push(...parseWarnings);
 
   if (records.length === 0) {
     summary.warnings.push("No importable variables were found in the selected file(s) — nothing was changed.");
-    return summary;
+    return { summary, diff };
   }
 
+  const collectionRefsByName = new Map<string, CollectionRef>();
+
   if (importMode === ImportMode.CLEAN) {
+    const toDelete = await figma.variables.getLocalVariableCollectionsAsync();
+    for (const collection of toDelete) {
+      diff.collections.push({ name: collection.name, action: "delete" });
+      summary.collectionsDeleted += 1;
+      if (!dryRun) collection.remove();
+    }
+    // Everything downstream treats the document as if it had no existing
+    // collections at all — matches the real post-deletion state in apply
+    // mode, and simulates it in dry-run mode.
+  } else {
     const existing = await figma.variables.getLocalVariableCollectionsAsync();
     for (const collection of existing) {
-      collection.remove();
-      summary.collectionsDeleted += 1;
+      collectionRefsByName.set(collection.name, {
+        name: collection.name,
+        real: collection,
+        isNew: false,
+        modes: collection.modes.map((m) => ({ modeId: m.modeId, name: m.name, isNew: false })),
+      });
     }
   }
 
   // --- Phase 1: collections & modes ---
-  const collectionsByName = new Map<string, VariableCollection>();
-  {
-    const existing = await figma.variables.getLocalVariableCollectionsAsync();
-    for (const collection of existing) {
-      collectionsByName.set(collection.name, collection);
-    }
-  }
-
   const modeNamesByCollection = new Map<string, string[]>();
   for (const record of records) {
     const modeNames = modeNamesByCollection.get(record.collectionName) ?? [];
@@ -290,51 +376,78 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
   }
 
   for (const [collectionName, modeNames] of modeNamesByCollection) {
-    let collection = collectionsByName.get(collectionName);
+    let collRef = collectionRefsByName.get(collectionName);
     let isNewCollection = false;
 
-    if (!collection) {
+    if (!collRef) {
       // Update-only never creates: a collection missing locally means every
-      // record under it is skipped entirely (handled by the `!collection`
+      // record under it is skipped entirely (handled by the `!collRef`
       // guards in phases 2/3 below).
       if (importMode === ImportMode.UPDATE_ONLY) continue;
 
-      collection = figma.variables.createVariableCollection(collectionName);
-      if (hasPrivateNamingConvention(collectionName)) {
-        collection.hiddenFromPublishing = true;
-      }
-      collectionsByName.set(collectionName, collection);
-      summary.collectionsCreated += 1;
       isNewCollection = true;
+      const hidden = hasPrivateNamingConvention(collectionName);
+      let real: VariableCollection | undefined;
+      if (!dryRun) {
+        real = figma.variables.createVariableCollection(collectionName);
+        if (hidden) real.hiddenFromPublishing = true;
+      }
+      collRef = {
+        name: collectionName,
+        real,
+        isNew: true,
+        modes: [{ modeId: real ? real.modes[0].modeId : syntheticModeId(collectionName, "__default__"), name: real ? real.modes[0].name : "__default__", isNew: true }],
+      };
+      collectionRefsByName.set(collectionName, collRef);
+      summary.collectionsCreated += 1;
+      diff.collections.push({ name: collectionName, action: "create" });
     } else {
       summary.collectionsReused += 1;
+      diff.collections.push({ name: collectionName, action: "reuse" });
     }
 
+    const ref = collRef;
     modeNames.forEach((modeName, index) => {
-      const existingMode = collection!.modes.find((m) => m.name === modeName);
+      const existingMode = ref.modes.find((m) => m.name === modeName);
       if (existingMode) return;
       if (importMode === ImportMode.UPDATE_ONLY) return;
 
       if (isNewCollection && index === 0) {
         // Rename the collection's auto-created default mode instead of adding a new one.
-        collection!.renameMode(collection!.modes[0].modeId, modeName);
+        if (!dryRun && ref.real) {
+          ref.real.renameMode(ref.modes[0].modeId, modeName);
+        }
+        ref.modes[0] = { modeId: ref.modes[0].modeId, name: modeName, isNew: true };
         summary.modesCreated += 1;
+        diff.modes.push({ collectionName, name: modeName, action: "create" });
         return;
       }
 
-      try {
-        collection!.addMode(modeName);
-        summary.modesCreated += 1;
-      } catch (err) {
-        summary.warnings.push(
-          `Could not add mode "${modeName}" to collection "${collectionName}": ${err instanceof Error ? err.message : String(err)}`
-        );
+      let modeId = syntheticModeId(collectionName, modeName);
+      if (!dryRun && ref.real) {
+        try {
+          ref.real.addMode(modeName);
+          modeId = ref.real.modes.find((m) => m.name === modeName)!.modeId;
+        } catch (err) {
+          summary.warnings.push(
+            `Could not add mode "${modeName}" to collection "${collectionName}": ${err instanceof Error ? err.message : String(err)}`
+          );
+          return;
+        }
       }
+      ref.modes.push({ modeId, name: modeName, isNew: true });
+      summary.modesCreated += 1;
+      diff.modes.push({ collectionName, name: modeName, action: "create" });
     });
   }
 
   // --- Phase 2: variables ---
-  const variablesByCollectionAndPath = new Map<string, Variable>();
+  const variableRefsByPath = new Map<string, VariableRef>();
+  const variableDiffByPath = new Map<string, ImportDiffVariable>();
+  // Whether a *matched* (not newly-created) variable's own metadata
+  // (description/scopes) actually differs from the file — combined with the
+  // per-mode value diffs at the end to decide whether it was a true no-op.
+  const metadataChangedByPath = new Map<string, boolean>();
   const seenPaths = new Set<string>();
 
   for (const record of records) {
@@ -342,13 +455,18 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
     if (seenPaths.has(pathKey)) continue;
     seenPaths.add(pathKey);
 
-    const collection = collectionsByName.get(record.collectionName);
-    if (!collection) continue;
+    const collRef = collectionRefsByName.get(record.collectionName);
+    if (!collRef) continue;
 
     const varName = record.pathParts.join("/");
-    const existingVariable = await findVariableByName(collection, varName);
+    let existingVariable: Variable | undefined;
+    if (collRef.real) {
+      existingVariable = await findVariableByName(collRef.real, varName);
+    }
 
-    let variable: Variable;
+    let varRef: VariableRef;
+    let diffEntry: ImportDiffVariable;
+
     if (existingVariable) {
       if (existingVariable.resolvedType !== record.resolvedType) {
         summary.warnings.push(
@@ -356,31 +474,54 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
         );
         continue;
       }
-      variable = existingVariable;
-      summary.variablesUpdated += 1;
+      varRef = { path: varName, collectionName: record.collectionName, real: existingVariable, isNew: false, resolvedType: existingVariable.resolvedType };
+      diffEntry = { collectionName: record.collectionName, path: varName, action: "update", resolvedType: record.resolvedType, values: [] };
+
+      // Only touch description/scopes — and only count this as a real
+      // update — when they actually differ, so an unchanged re-import of an
+      // identical file is a true no-op rather than a no-op-with-a-write.
+      const willWriteScopes = record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES");
+      const descriptionChanged = existingVariable.description !== record.description;
+      const scopesChanged = willWriteScopes && !scopesEqual(existingVariable.scopes, record.scopes);
+      metadataChangedByPath.set(pathKey, descriptionChanged || scopesChanged);
+
+      if (!dryRun && varRef.real) {
+        if (descriptionChanged) varRef.real.description = record.description;
+        if (scopesChanged) varRef.real.scopes = record.scopes;
+      }
     } else {
       // Update-only never creates a variable that doesn't already exist.
       if (importMode === ImportMode.UPDATE_ONLY) continue;
 
-      variable = figma.variables.createVariable(varName, collection, record.resolvedType);
-      if (hasPrivateNamingConvention(varName)) {
-        variable.hiddenFromPublishing = true;
+      const hidden = hasPrivateNamingConvention(varName);
+      let real: Variable | undefined;
+      if (!dryRun && collRef.real) {
+        real = figma.variables.createVariable(varName, collRef.real, record.resolvedType);
+        if (hidden) real.hiddenFromPublishing = true;
       }
+      varRef = { path: varName, collectionName: record.collectionName, real, isNew: true, resolvedType: record.resolvedType };
+      diffEntry = { collectionName: record.collectionName, path: varName, action: "create", resolvedType: record.resolvedType, values: [] };
       summary.variablesCreated += 1;
+
+      if (!dryRun && varRef.real) {
+        varRef.real.description = record.description;
+        if (record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES")) {
+          varRef.real.scopes = record.scopes;
+        }
+      }
     }
 
-    variable.description = record.description;
-    if (record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES")) {
-      variable.scopes = record.scopes;
-    }
-
-    variablesByCollectionAndPath.set(pathKey, variable);
+    variableRefsByPath.set(pathKey, varRef);
+    variableDiffByPath.set(pathKey, diffEntry);
+    diff.variables.push(diffEntry);
   }
 
   // --- Phase 3: values (literals first, then aliases so every variable already exists) ---
   const aliasRecords: ImportRecord[] = [];
 
   for (const record of records) {
+    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
+
     if (typeof record.rawValue === "string" && record.rawValue === "_unlinked") {
       summary.warnings.push(
         `Skipped unlinked reference for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}).`
@@ -392,63 +533,123 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
       continue;
     }
 
-    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
-    const variable = variablesByCollectionAndPath.get(pathKey);
-    const collection = collectionsByName.get(record.collectionName);
-    if (!variable || !collection) continue;
+    const varRef = variableRefsByPath.get(pathKey);
+    const collRef = collectionRefsByName.get(record.collectionName);
+    if (!varRef || !collRef) continue;
 
-    const mode = collection.modes.find((m) => m.name === record.modeName);
-    if (!mode) continue;
+    const modeRef = collRef.modes.find((m) => m.name === record.modeName);
+    if (!modeRef) continue;
 
-    try {
-      variable.setValueForMode(mode.modeId, parseLiteralValue(record.rawValue, record.resolvedType));
+    const newValue = parseLiteralValue(record.rawValue, record.resolvedType);
+    const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
+      ? varRef.real.valuesByMode[modeRef.modeId]
+      : undefined;
+    const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
+    const after = formatLiteral(newValue, record.resolvedType);
+
+    const changed = !literalValueEquals(beforeRaw, newValue, record.resolvedType);
+    const diffEntry = variableDiffByPath.get(pathKey);
+    diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
+
+    // Skip the write entirely when the stored value already matches — a
+    // re-import of an unchanged file shouldn't touch the document at all.
+    if (!changed) continue;
+
+    if (dryRun) {
       summary.valuesSet += 1;
-    } catch (err) {
-      summary.warnings.push(
-        `Failed to set value for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
-      );
+    } else if (varRef.real) {
+      try {
+        varRef.real.setValueForMode(modeRef.modeId, newValue);
+        summary.valuesSet += 1;
+      } catch (err) {
+        summary.warnings.push(
+          `Failed to set value for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
 
   for (const record of aliasRecords) {
     const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
-    const variable = variablesByCollectionAndPath.get(pathKey);
-    const collection = collectionsByName.get(record.collectionName);
-    if (!variable || !collection) continue;
+    const varRef = variableRefsByPath.get(pathKey);
+    const collRef = collectionRefsByName.get(record.collectionName);
+    if (!varRef || !collRef) continue;
 
-    const mode = collection.modes.find((m) => m.name === record.modeName);
-    if (!mode) continue;
+    const modeRef = collRef.modes.find((m) => m.name === record.modeName);
+    if (!modeRef) continue;
 
-    const candidates = resolveAliasCandidates(record.rawValue as string, record.collectionName, collectionsByName);
+    const candidates = resolveAliasCandidates(record.rawValue as string, record.collectionName, collectionRefsByName);
 
-    let resolvedTarget: { modeId: string; variable: Variable } | undefined;
+    let resolvedTarget: { modeRef: ModeRef; varRef: VariableRef } | undefined;
     for (const candidate of candidates) {
-      const targetCollection = collectionsByName.get(candidate.collectionName);
-      const targetModeId = targetCollection?.modes.find((m) => m.name === candidate.modeName)?.modeId;
-      if (!targetCollection || !targetModeId) continue;
+      const targetCollRef = collectionRefsByName.get(candidate.collectionName);
+      if (!targetCollRef) continue;
+      const targetModeRef = targetCollRef.modes.find((m) => m.name === candidate.modeName);
+      if (!targetModeRef) continue;
 
-      const targetVariable = await findVariableByName(targetCollection, candidate.path);
-      if (targetVariable) {
-        resolvedTarget = { modeId: targetModeId, variable: targetVariable };
+      const targetPathKey = `${candidate.collectionName} ${candidate.path}`;
+      let targetVarRef = variableRefsByPath.get(targetPathKey);
+      if (!targetVarRef && targetCollRef.real) {
+        const found = await findVariableByName(targetCollRef.real, candidate.path);
+        if (found) {
+          targetVarRef = { path: candidate.path, collectionName: candidate.collectionName, real: found, isNew: false, resolvedType: found.resolvedType };
+        }
+      }
+      if (targetVarRef) {
+        resolvedTarget = { modeRef: targetModeRef, varRef: targetVarRef };
         break;
       }
     }
+
+    const diffEntry = variableDiffByPath.get(pathKey);
 
     if (!resolvedTarget) {
       summary.warnings.push(
         `Could not resolve alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): value "${record.rawValue}" did not match any known collection/mode/variable.`
       );
+      diffEntry?.values.push({ modeName: record.modeName, before: undefined, after: "(unresolved alias)", changed: true });
       continue;
     }
 
-    try {
-      variable.setValueForMode(mode.modeId, figma.variables.createVariableAlias(resolvedTarget.variable));
+    const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
+      ? varRef.real.valuesByMode[modeRef.modeId]
+      : undefined;
+    const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
+    const after = `→ ${resolvedTarget.varRef.path}`;
+    const changed = !aliasValueEquals(beforeRaw, resolvedTarget.varRef.real?.id);
+    diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
+
+    // Already points at the right variable — skip the write.
+    if (!changed) continue;
+
+    if (dryRun) {
       summary.aliasesResolved += 1;
       summary.valuesSet += 1;
-    } catch (err) {
-      summary.warnings.push(
-        `Failed to set alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
-      );
+    } else if (varRef.real && resolvedTarget.varRef.real) {
+      try {
+        varRef.real.setValueForMode(modeRef.modeId, figma.variables.createVariableAlias(resolvedTarget.varRef.real));
+        summary.aliasesResolved += 1;
+        summary.valuesSet += 1;
+      } catch (err) {
+        summary.warnings.push(
+          `Failed to set alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
+  // Reconcile "update" entries against what actually changed: a matched
+  // variable whose description, scopes and every mode's value already equal
+  // the file is a true no-op, not an update, whether or not the import
+  // touched the document.
+  for (const [pathKey, diffEntry] of variableDiffByPath) {
+    if (diffEntry.action !== "update") continue;
+    const anyValueChanged = diffEntry.values.some((v) => v.changed);
+    const metadataChanged = metadataChangedByPath.get(pathKey) ?? false;
+    if (!anyValueChanged && !metadataChanged) {
+      diffEntry.action = "unchanged";
+    } else {
+      summary.variablesUpdated += 1;
     }
   }
 
@@ -457,45 +658,77 @@ export async function importVariables(rawFiles: string[], importMode: ImportMode
   // collections the file never mentions, and leftover variables/modes inside
   // collections it does mention.
   if (importMode === ImportMode.SYNC) {
-    for (const collection of collectionsByName.values()) {
-      const modeNames = modeNamesByCollection.get(collection.name);
+    for (const collRef of collectionRefsByName.values()) {
+      const modeNames = modeNamesByCollection.get(collRef.name);
 
       if (!modeNames) {
         // Not present in the file at all — delete the whole collection.
-        collection.remove();
+        diff.collections.push({ name: collRef.name, action: "delete" });
         summary.collectionsDeleted += 1;
+        if (!dryRun && collRef.real) collRef.real.remove();
         continue;
       }
 
-      const keptVariableNames = new Set(
-        records
-          .filter((record) => record.collectionName === collection.name)
-          .map((record) => record.pathParts.join("/"))
-      );
+      if (collRef.real) {
+        const keptVariableNames = new Set(
+          records
+            .filter((record) => record.collectionName === collRef.name)
+            .map((record) => record.pathParts.join("/"))
+        );
 
-      const existingVariables = await Promise.all(
-        collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
-      );
-      for (const variable of existingVariables) {
-        if (variable && !keptVariableNames.has(variable.name)) {
-          variable.remove();
-          summary.variablesDeleted += 1;
+        const existingVariables = await Promise.all(
+          collRef.real.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
+        );
+        for (const variable of existingVariables) {
+          if (variable && !keptVariableNames.has(variable.name)) {
+            diff.variables.push({ collectionName: collRef.name, path: variable.name, action: "delete", resolvedType: variable.resolvedType, values: [] });
+            summary.variablesDeleted += 1;
+            if (!dryRun) variable.remove();
+          }
         }
       }
 
-      for (const mode of collection.modes) {
-        if (modeNames.includes(mode.name)) continue;
-        try {
-          collection.removeMode(mode.modeId);
-          summary.modesDeleted += 1;
-        } catch (err) {
-          summary.warnings.push(
-            `Could not remove mode "${mode.name}" from collection "${collection.name}": ${err instanceof Error ? err.message : String(err)}`
-          );
+      for (const modeRef of collRef.modes) {
+        if (modeNames.includes(modeRef.name)) continue;
+        diff.modes.push({ collectionName: collRef.name, name: modeRef.name, action: "delete" });
+        summary.modesDeleted += 1;
+        if (!dryRun && collRef.real && !modeRef.isNew) {
+          try {
+            collRef.real.removeMode(modeRef.modeId);
+          } catch (err) {
+            summary.warnings.push(
+              `Could not remove mode "${modeRef.name}" from collection "${collRef.name}": ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
         }
       }
     }
   }
 
+  return { summary, diff };
+}
+
+/**
+ * Computes what an import would do — every collection/mode/variable/value
+ * create, update or delete — without touching the document. Safe to call
+ * freely for preview purposes.
+ */
+export async function previewImport(rawFiles: string[], importMode: ImportMode): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+  return runImport(rawFiles, importMode, true);
+}
+
+/**
+ * Imports a set of previously-exported VarVar JSON files into the current
+ * Figma document: recreates collections, modes and variables, sets literal
+ * values, and resolves the plugin's `$.Collection.Mode.path` alias-reference
+ * convention back into real Figma variable aliases.
+ *
+ * @param rawFiles - Raw JSON text of each selected file
+ * @param importMode - How to reconcile the import against existing local
+ *   collections: additive merge, update-existing-only, merge-then-prune
+ *   (sync), or wipe-then-import (clean). See {@link ImportMode}.
+ */
+export async function importVariables(rawFiles: string[], importMode: ImportMode): Promise<ImportSummary> {
+  const { summary } = await runImport(rawFiles, importMode, false);
   return summary;
 }
