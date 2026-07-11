@@ -252,17 +252,23 @@ async function formatStoredValue(value: VariableValue | undefined, type: Variabl
 
 /**
  * Whether an existing stored value already equals the literal value about to
- * be imported — compared on the underlying value, not its formatted display
- * string, so float-rounding in {@link formatLiteral} (e.g. two distinct RGBA
- * floats that happen to round to the same displayed hex) can't hide a real
- * write from the diff.
+ * be imported. `after` always came from parsing an exported file, so for
+ * COLOR it can never be more precise than the export format's own
+ * quantization (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for
+ * alpha) — comparing at full float precision against a native Figma color
+ * (which isn't necessarily on that grid) would report a "change" on every
+ * re-import of a file exported by this same plugin. Both sides are rounded
+ * to that grid before comparing, so only a color that's actually different
+ * once round-tripped through the export format counts as changed.
  */
 function literalValueEquals(before: VariableValue | undefined, after: VariableValue, type: VariableResolvedDataType): boolean {
   if (before === undefined || isAliasStoredValue(before)) return false;
   if (type === "COLOR") {
     const a = before as RGBA;
     const b = after as RGBA;
-    return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
+    const ch = (n: number) => Math.round(n * 255);
+    const alpha = (n: number) => Math.round(n * 100);
+    return ch(a.r) === ch(b.r) && ch(a.g) === ch(b.g) && ch(a.b) === ch(b.b) && alpha(a.a) === alpha(b.a);
   }
   return before === after;
 }
