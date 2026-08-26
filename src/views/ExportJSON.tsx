@@ -25,6 +25,14 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
         setSeeOutput,
         useLegacyFormat,
         setUseLegacyFormat,
+        exportUnit,
+        setExportUnit,
+        rootFontSize,
+        setRootFontSize,
+        appendPxToUnscoped,
+        setAppendPxToUnscoped,
+        dtcgCompliantValues,
+        setDtcgCompliantValues,
         exportedData,
         exportedFiles,
         usedExtendedCollections,
@@ -43,9 +51,17 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
                 seeOutput={seeOutput}
                 useRowColumnPos={false}
                 useLegacyFormat={useLegacyFormat}
+                exportUnit={exportUnit}
+                rootFontSize={rootFontSize}
+                appendPxToUnscoped={appendPxToUnscoped}
+                dtcgCompliantValues={dtcgCompliantValues}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
                 onUseLegacyFormatChange={setUseLegacyFormat}
+                onExportUnitChange={setExportUnit}
+                onRootFontSizeChange={setRootFontSize}
+                onAppendPxToUnscopedChange={setAppendPxToUnscoped}
+                onDtcgCompliantValuesChange={setDtcgCompliantValues}
             />
 
             <FilenameInput 

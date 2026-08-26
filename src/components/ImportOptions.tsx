@@ -1,10 +1,15 @@
 import React from "react";
-import { Flex, RadioGroup, Label, Text } from "figma-kit";
+import { Flex, RadioGroup, Label, Text, Input } from "figma-kit";
 import { ImportMode } from "../types.d";
+import { HelpTip } from "./HelpTip";
 
 interface ImportOptionsProps {
     importMode: ImportMode;
     onImportModeChange: (importMode: ImportMode) => void;
+    /** Shown only when the previewed file(s) actually carry `rem`/`em` values. */
+    showRootFontSize?: boolean;
+    rootFontSize?: string;
+    onRootFontSizeChange?: (rootFontSize: string) => void;
     disabled?: boolean;
 }
 
@@ -16,10 +21,18 @@ interface ImportOptionsProps {
  * Clean deletes everything up front and recreates it, so even variables that
  * match the file exactly lose their bindings. Both show a warning and (in the
  * parent view) require confirmation before running.
+ *
+ * When the previewed file carries font-relative values, a root font size field
+ * appears alongside them. It stays editable even while the reconciliation mode
+ * is locked behind a shown preview, because changing it re-runs the dry run —
+ * the diff on screen always shows the converted numbers the import would write.
  */
 export const ImportOptions: React.FC<ImportOptionsProps> = ({
     importMode,
     onImportModeChange,
+    showRootFontSize = false,
+    rootFontSize = "16",
+    onRootFontSizeChange,
     disabled = false
 }) => {
     return (
@@ -57,6 +70,36 @@ export const ImportOptions: React.FC<ImportOptionsProps> = ({
                     Clean import (delete everything first)
                 </RadioGroup.Label>
             </RadioGroup.Root>
+
+            {showRootFontSize && onRootFontSizeChange && (
+                <Flex gap="2" direction="column">
+                    <Flex gap="2" align="center">
+                        <Label htmlFor="varvar-import-root-font-size">
+                            Root font size
+                        </Label>
+                        <HelpTip content="The file's rem/em values are multiplied by this to get the number Figma stores, so 2rem becomes 32. Defaults to 16, the browser default; an empty or invalid entry falls back to 16 rather than importing a broken value." />
+                    </Flex>
+                    <Flex gap="2" align="center">
+                        <Input
+                            id="varvar-import-root-font-size"
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={rootFontSize}
+                            selectOnClick
+                            onChange={(event) => onRootFontSizeChange(event.target.value)}
+                            style={{ width: '72px' }}
+                        />
+                        <Label htmlFor="varvar-import-root-font-size">px</Label>
+                    </Flex>
+                    <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
+                        This file contains rem/em values, which Figma has no equivalent
+                        for. Each one is multiplied by this root font size on import —
+                        with 16, <code>2rem</code> becomes <code>32</code>. The preview
+                        updates to show the converted numbers.
+                    </Text>
+                </Flex>
+            )}
 
             {importMode === ImportMode.MERGE && (
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>

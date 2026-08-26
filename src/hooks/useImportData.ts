@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { MessageTypes, ImportSummary, ImportDiff, ImportMode } from "../types.d";
+import { DEFAULT_ROOT_FONT_SIZE, normalizeRootFontSize } from "../utils/units";
 
 interface UseImportDataReturn {
     fileNames: string[];
@@ -7,6 +8,9 @@ interface UseImportDataReturn {
     setFiles: (fileNames: string[], fileContents: string[]) => void;
     importMode: ImportMode;
     setImportMode: (importMode: ImportMode) => void;
+    rootFontSize: string;
+    setRootFontSize: (rootFontSize: string) => void;
+    needsRootFontSize: boolean;
     confirmDialogOpen: boolean;
     setConfirmDialogOpen: (open: boolean) => void;
     isPreviewing: boolean;
@@ -32,6 +36,14 @@ export const useImportData = (): UseImportDataReturn => {
     const [fileNames, setFileNames] = useState<string[]>([]);
     const [fileContents, setFileContents] = useState<string[]>([]);
     const [importMode, setImportMode] = useState<ImportMode>(ImportMode.MERGE);
+    // Kept as a string so the field can be cleared while typing; the plugin side
+    // normalizes it, so an empty or nonsensical entry falls back to 16.
+    const [rootFontSize, setRootFontSize] = useState<string>(String(DEFAULT_ROOT_FONT_SIZE));
+    // Set from the dry-run preview: only a file that actually carries rem/em
+    // values needs a root font size, so the field only appears once one has been
+    // seen. Sticky for as long as the selected files are, so the field can't
+    // vanish from under the cursor while a re-preview is in flight.
+    const [needsRootFontSize, setNeedsRootFontSize] = useState<boolean>(false);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState<boolean>(false);
     const [isPreviewing, setIsPreviewing] = useState<boolean>(false);
     const [previewDiff, setPreviewDiff] = useState<ImportDiff | null>(null);
@@ -53,6 +65,7 @@ export const useImportData = (): UseImportDataReturn => {
         setPreviewedImportMode(null);
         setImportSummary(null);
         setImportError(null);
+        setNeedsRootFontSize(false);
     };
 
     const handlePreviewClick = () => {
@@ -68,7 +81,8 @@ export const useImportData = (): UseImportDataReturn => {
             pluginMessage: {
                 type: MessageTypes.IMPORT_PREVIEW_REQUEST,
                 importFiles: fileContents,
-                importMode
+                importMode,
+                rootFontSize: normalizeRootFontSize(rootFontSize)
             }
         }, "*");
     };
@@ -89,7 +103,8 @@ export const useImportData = (): UseImportDataReturn => {
             pluginMessage: {
                 type: MessageTypes.IMPORT_REQUEST,
                 importFiles: fileContents,
-                importMode: modeToApply
+                importMode: modeToApply,
+                rootFontSize: normalizeRootFontSize(rootFontSize)
             }
         }, "*");
     };
@@ -112,12 +127,34 @@ export const useImportData = (): UseImportDataReturn => {
         sendImportRequest();
     };
 
+    // Re-run the dry run whenever the root font size changes, so the diff always
+    // shows the numbers the confirmed import would actually write. Only fires
+    // while a preview is on screen (so never on mount), and deliberately leaves
+    // the previous diff in place until the new one lands rather than blanking
+    // the panel on every keystroke.
+    useEffect(() => {
+        if (previewDiff === null || fileContents.length === 0) return;
+
+        setIsPreviewing(true);
+        parent.postMessage({
+            pluginMessage: {
+                type: MessageTypes.IMPORT_PREVIEW_REQUEST,
+                importFiles: fileContents,
+                importMode: previewedImportMode ?? importMode,
+                rootFontSize: normalizeRootFontSize(rootFontSize)
+            }
+        }, "*");
+    }, [rootFontSize]);
+
     useEffect(() => {
         window.onmessage = ({ data: { pluginMessage } }) => {
             if (pluginMessage.type === MessageTypes.IMPORT_PREVIEW_RESULT) {
                 setIsPreviewing(false);
                 setPreviewSummary(pluginMessage.importSummary);
                 setPreviewDiff(pluginMessage.importDiff);
+                if (pluginMessage.importSummary?.hasFontRelativeUnits) {
+                    setNeedsRootFontSize(true);
+                }
             } else if (pluginMessage.type === MessageTypes.IMPORT_SUCCESS_RESULT) {
                 setIsImporting(false);
                 setImportSummary(pluginMessage.importSummary);
@@ -138,6 +175,9 @@ export const useImportData = (): UseImportDataReturn => {
         setFiles,
         importMode,
         setImportMode,
+        rootFontSize,
+        setRootFontSize,
+        needsRootFontSize,
         confirmDialogOpen,
         setConfirmDialogOpen,
         isPreviewing,

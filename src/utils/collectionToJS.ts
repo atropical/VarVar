@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { cleanFloat32 } from "./numberFormat";
 import { toCamelCase } from "./stringTransformation";
 import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
@@ -159,7 +160,7 @@ async function processCollection({
                 const processedValue = resolvedType === "COLOR"
                   ? rgbToCssColor(value as RGBA)
                   : resolvedType === "FLOAT"
-                    ? parseFloat(value as string)
+                    ? cleanFloat32(Number(value))
                     : resolvedType === "BOOLEAN"
                       ? Boolean(value)
                       : String(value);
@@ -250,7 +251,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
                 const processedValue = resolvedType === "COLOR"
                   ? rgbToCssColor(overrideValue as RGBA)
                   : resolvedType === "FLOAT"
-                    ? parseFloat(overrideValue as string)
+                    ? cleanFloat32(Number(overrideValue))
                     : resolvedType === "BOOLEAN"
                       ? Boolean(overrideValue)
                       : String(overrideValue);

@@ -59,6 +59,17 @@ export type CssColor =
   | CssGlobalValues;
 
 /**
+ * The unit a numeric variable value is exported with. "none" emits the bare
+ * number, `px` is appended unchanged, and `rem` divides the raw number by the
+ * configured root font size.
+ *
+ * Deliberately limited to these three: `px` and `rem` are the only units DTCG
+ * can express for a `dimension`, and relative units cause more trouble than
+ * they are worth (their meaning depends on a context the exporter cannot see).
+ */
+export type ExportUnit = "none" | "px" | "rem";
+
+/**
  * Supported export formats for Figma variables
  */
 export enum OutputFormats {
@@ -146,6 +157,18 @@ export interface ImportSummary {
   aliasesResolved: number;
   codeSyntaxSet: number;
   warnings: string[];
+  /**
+   * Every CSS unit suffix carried by a numeric value in the imported file(s),
+   * lower-cased and deduplicated (e.g. `["px", "rem"]`). Empty for a file whose
+   * numeric values are all bare numbers.
+   */
+  unitsSeen: string[];
+  /**
+   * Whether any of {@link unitsSeen} is font-relative (`rem`/`em`). Those can
+   * only be turned back into Figma numbers by multiplying by a root font size,
+   * which the import view asks the user for rather than guessing.
+   */
+  hasFontRelativeUnits: boolean;
 }
 
 /** Itemized create/reuse/delete decision for a single collection, computed by a dry-run preview. */
@@ -218,7 +241,10 @@ export interface PluginMessage {
   useTailwindFormat?: boolean;
   useSingleDashSeparator?: boolean;
   useCodeSyntaxName?: boolean;
+  exportUnit?: ExportUnit;
+  rootFontSize?: number;
   appendPxToUnscoped?: boolean;
+  dtcgCompliantValues?: boolean;
   useLegacyFormat?: boolean;
   count?: number;
   filename?: string;

@@ -27,6 +27,9 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
         setFiles,
         importMode,
         setImportMode,
+        rootFontSize,
+        setRootFontSize,
+        needsRootFontSize,
         confirmDialogOpen,
         setConfirmDialogOpen,
         isPreviewing,
@@ -58,6 +61,9 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
             <ImportOptions
                 importMode={importMode}
                 onImportModeChange={setImportMode}
+                showRootFontSize={needsRootFontSize}
+                rootFontSize={rootFontSize}
+                onRootFontSizeChange={setRootFontSize}
                 disabled={previewDiff !== null}
             />
 
@@ -67,10 +73,10 @@ export const ImportJSON: React.FC<ImportJSONProps> = ({ editorType = "" }) => {
                         variant="primary"
                         fullWidth={true}
                         size="medium"
-                        disabled={isImporting}
+                        disabled={isImporting || isPreviewing}
                         onClick={handleConfirmImportClick}
                     >
-                        {isImporting ? "Importing…" : "Confirm import"}
+                        {isImporting ? "Importing…" : isPreviewing ? "Updating preview…" : "Confirm import"}
                     </Button>
                     <Button
                         variant="secondary"

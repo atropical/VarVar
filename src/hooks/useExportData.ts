@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import JSZip from "jszip";
 import { OutputFormats, ExportFile } from "../types.d";
+import type { ExportUnit } from "../types.d";
+import { DEFAULT_EXPORT_UNIT, DEFAULT_ROOT_FONT_SIZE, normalizeRootFontSize } from "../utils/units";
 
 interface UseExportDataProps {
     format: OutputFormats;
@@ -8,7 +10,10 @@ interface UseExportDataProps {
     useTailwindFormat?: boolean;
     useSingleDashSeparator?: boolean;
     useCodeSyntaxName?: boolean;
+    exportUnit?: ExportUnit;
+    rootFontSize?: string;
     appendPxToUnscoped?: boolean;
+    dtcgCompliantValues?: boolean;
     useLegacyFormat?: boolean;
 }
 
@@ -25,8 +30,14 @@ interface UseExportDataReturn {
     setUseSingleDashSeparator: (useSingleDashSeparator: boolean) => void;
     useCodeSyntaxName: boolean;
     setUseCodeSyntaxName: (useCodeSyntaxName: boolean) => void;
+    exportUnit: ExportUnit;
+    setExportUnit: (exportUnit: ExportUnit) => void;
+    rootFontSize: string;
+    setRootFontSize: (rootFontSize: string) => void;
     appendPxToUnscoped: boolean;
     setAppendPxToUnscoped: (appendPxToUnscoped: boolean) => void;
+    dtcgCompliantValues: boolean;
+    setDtcgCompliantValues: (dtcgCompliantValues: boolean) => void;
     useLegacyFormat: boolean;
     setUseLegacyFormat: (useLegacyFormat: boolean) => void;
     exportedData: string;
@@ -51,22 +62,36 @@ export const useExportData = ({
     useTailwindFormat: initialUseTailwindFormat = false,
     useSingleDashSeparator: initialUseSingleDashSeparator = true,
     useCodeSyntaxName: initialUseCodeSyntaxName = false,
+    exportUnit: initialExportUnit = DEFAULT_EXPORT_UNIT,
+    rootFontSize: initialRootFontSize = String(DEFAULT_ROOT_FONT_SIZE),
     appendPxToUnscoped: initialAppendPxToUnscoped = false,
+    dtcgCompliantValues: initialDtcgCompliantValues = true,
     useLegacyFormat: initialUseLegacyFormat = false
 }: UseExportDataProps): UseExportDataReturn => {
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
     const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
-    // Single-dash group separator only applies to the Tailwind CSS output, where a
-    // `--` between groups stops Tailwind IntelliSense from suggesting the variable.
-    const [useSingleDashSeparator, setUseSingleDashSeparator] = useState<boolean>(initialUseSingleDashSeparator);
+    // The group separator is offered for both CSS outputs, but their defaults differ:
+    // Tailwind needs single dashes for IntelliSense to suggest the variable, while
+    // plain CSS has always joined groups with `--`. Until the user touches the switch
+    // it simply follows the Tailwind toggle; from then on their choice sticks.
+    const [singleDashSeparatorChoice, setSingleDashSeparatorChoice] = useState<boolean>(initialUseSingleDashSeparator);
+    const [singleDashSeparatorTouched, setSingleDashSeparatorTouched] = useState<boolean>(false);
     // The Web code syntax can only stand in for a variable name in the formats
     // that emit one, so it's ignored (and never sent) for JSON/CSV.
     const [useCodeSyntaxName, setUseCodeSyntaxName] = useState<boolean>(initialUseCodeSyntaxName);
-    // Only the CSS/Tailwind output gives a bare number a unit, so the "px on
-    // undecided scopes" opt-in is ignored (and never sent) for the other formats.
+    const [exportUnit, setExportUnit] = useState<ExportUnit>(initialExportUnit);
+    // Kept as a string so the field can be cleared while typing; every consumer
+    // normalizes it, so an empty or nonsensical entry falls back to 16.
+    const [rootFontSize, setRootFontSize] = useState<string>(initialRootFontSize);
+    // Whether variables left on Figma's default scoping count as dimensions and
+    // get the unit too. Off by default, as it shipped in 4.4: nothing about those
+    // variables says they are lengths.
     const [appendPxToUnscoped, setAppendPxToUnscoped] = useState<boolean>(initialAppendPxToUnscoped);
+    // JSON only: emit dimensions as the DTCG `{ value, unit }` object rather than
+    // the "16px" string earlier versions emitted. On by default.
+    const [dtcgCompliantValues, setDtcgCompliantValues] = useState<boolean>(initialDtcgCompliantValues);
     const [useLegacyFormat, setUseLegacyFormat] = useState<boolean>(initialUseLegacyFormat);
     const [exportedData, setExportedData] = useState<string>("");
     const [exportedFiles, setExportedFiles] = useState<ExportFile[] | null>(null);
@@ -80,6 +105,35 @@ export const useExportData = ({
     const supportsCodeSyntaxName = format === OutputFormats.CSS
         || format === OutputFormats.JS;
 
+    // CSV and JS stay unit-free: CSV's Value column is a spreadsheet cell that has
+    // always held a bare number (and its Scopes column already says what the value
+    // is for), and the JS output's values are real JavaScript literals that
+    // consumers read as numbers — a unit would turn them into strings.
+    const supportsUnitOption = format === OutputFormats.CSS
+        || format === OutputFormats.JSON;
+
+    const useSingleDashSeparator = singleDashSeparatorTouched
+        ? singleDashSeparatorChoice
+        : useTailwindFormat;
+
+    const setUseSingleDashSeparator = (value: boolean) => {
+        setSingleDashSeparatorTouched(true);
+        setSingleDashSeparatorChoice(value);
+    };
+
+    /**
+     * The unit-related half of an export message. Shared by every re-export
+     * trigger so a new option can't be sent by one path and forgotten by
+     * another. Formats that emit no unit send the defaults, which the exporters
+     * ignore anyway.
+     */
+    const unitPayload = () => ({
+        exportUnit: supportsUnitOption ? exportUnit : DEFAULT_EXPORT_UNIT,
+        rootFontSize: normalizeRootFontSize(rootFontSize),
+        appendPxToUnscoped: supportsUnitOption ? appendPxToUnscoped : false,
+        dtcgCompliantValues: format === OutputFormats.JSON ? dtcgCompliantValues : true
+    });
+
     const handleExport = () => {
         parent.postMessage({
             pluginMessage: {
@@ -87,9 +141,9 @@ export const useExportData = ({
                 format,
                 useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
                 useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
-                useSingleDashSeparator: format === OutputFormats.CSS && useTailwindFormat ? useSingleDashSeparator : false,
+                useSingleDashSeparator: format === OutputFormats.CSS ? useSingleDashSeparator : false,
                 useCodeSyntaxName: supportsCodeSyntaxName ? useCodeSyntaxName : false,
-                appendPxToUnscoped: format === OutputFormats.CSS ? appendPxToUnscoped : false,
+                ...unitPayload(),
                 useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
             }
         }, "*");
@@ -179,13 +233,31 @@ export const useExportData = ({
                     format, 
                     useLinkedVarRowAndColPos: false,
                     useTailwindFormat: useTailwindFormat,
-                    useSingleDashSeparator: useTailwindFormat ? useSingleDashSeparator : false,
+                    useSingleDashSeparator,
                     useCodeSyntaxName,
-                    appendPxToUnscoped
+                    ...unitPayload()
                 } 
             }, "*");
         }
-    }, [useTailwindFormat, useSingleDashSeparator, appendPxToUnscoped, format]);
+    }, [useTailwindFormat, useSingleDashSeparator, format]);
+
+    // Re-export when any of the value-shaping options change (CSS and JSON)
+    useEffect(() => {
+        if (supportsUnitOption && exportedData) {
+            parent.postMessage({
+                pluginMessage: {
+                    type: "EXPORT.SUCCESS" as any,
+                    format,
+                    useLinkedVarRowAndColPos: false,
+                    useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
+                    useSingleDashSeparator: format === OutputFormats.CSS ? useSingleDashSeparator : false,
+                    useCodeSyntaxName: supportsCodeSyntaxName ? useCodeSyntaxName : false,
+                    ...unitPayload(),
+                    useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
+                }
+            }, "*");
+        }
+    }, [exportUnit, rootFontSize, appendPxToUnscoped, dtcgCompliantValues, format]);
 
     // Re-export when the code-syntax naming toggle changes (CSS and JS formats only)
     useEffect(() => {
@@ -196,9 +268,9 @@ export const useExportData = ({
                     format,
                     useLinkedVarRowAndColPos: false,
                     useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
-                    useSingleDashSeparator: format === OutputFormats.CSS && useTailwindFormat ? useSingleDashSeparator : false,
+                    useSingleDashSeparator: format === OutputFormats.CSS ? useSingleDashSeparator : false,
                     useCodeSyntaxName,
-                    appendPxToUnscoped: format === OutputFormats.CSS ? appendPxToUnscoped : false,
+                    ...unitPayload(),
                     useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
                 }
             }, "*");
@@ -232,6 +304,7 @@ export const useExportData = ({
                     useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
                     useTailwindFormat: false,
                     useCodeSyntaxName: supportsCodeSyntaxName ? useCodeSyntaxName : false,
+                    ...unitPayload(),
                     useLegacyFormat
                 }
             }, "*");
@@ -258,8 +331,14 @@ export const useExportData = ({
         setUseSingleDashSeparator,
         useCodeSyntaxName,
         setUseCodeSyntaxName,
+        exportUnit,
+        setExportUnit,
+        rootFontSize,
+        setRootFontSize,
         appendPxToUnscoped,
         setAppendPxToUnscoped,
+        dtcgCompliantValues,
+        setDtcgCompliantValues,
         useLegacyFormat,
         setUseLegacyFormat,
         exportedData,

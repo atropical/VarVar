@@ -1,4 +1,6 @@
 import { cssColorToRgba, rgbToCssColor } from "./color";
+import { cleanFloat32 } from "./numberFormat";
+import { DEFAULT_ROOT_FONT_SIZE, isFontRelativeUnit, normalizeRootFontSize, parseUnitValue } from "./units";
 import { CODE_SYNTAX_PLATFORMS, normalizeCodeSyntax } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
 import { ImportMode } from "../types.d";
@@ -85,7 +87,8 @@ function walkVariables(
   modeName: string,
   pathParts: string[],
   records: ImportRecord[],
-  warnings: string[]
+  warnings: string[],
+  unitsSeen: Set<string>
 ): void {
   for (const [key, node] of Object.entries(variables)) {
     if (isTokenLeaf(node)) {
@@ -94,6 +97,13 @@ function walkVariables(
       if (!resolvedType || !validTypes.has(resolvedType)) {
         warnings.push(`Skipped "${path}" in "${collectionName}" (${modeName}): unrecognized or unsupported $type "${String(node.$type)}".`);
         continue;
+      }
+      // Note every unit the file carries — in either spelling, the "16px"
+      // string or the DTCG `{ value, unit }` object — so the UI can ask for a
+      // root font size when (and only when) a font-relative one is present.
+      if (resolvedType === "FLOAT") {
+        const withUnit = parseUnitValue(rawValue);
+        if (withUnit) unitsSeen.add(withUnit.unit);
       }
       records.push({
         collectionName,
@@ -106,27 +116,29 @@ function walkVariables(
         rawValue,
       });
     } else if (typeof node === "object" && node !== null) {
-      walkVariables(node as Record<string, unknown>, collectionName, modeName, [...pathParts, key], records, warnings);
+      walkVariables(node as Record<string, unknown>, collectionName, modeName, [...pathParts, key], records, warnings, unitsSeen);
     }
   }
 }
 
 /**
  * Parses and merges every raw JSON file's `{collection, mode, variables}[]`
- * array into a flat list of per-variable-per-mode records.
+ * array into a flat list of per-variable-per-mode records, alongside every
+ * CSS unit suffix those records' numeric values carry.
  */
-function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings: string[] } {
+function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings: string[]; unitsSeen: string[] } {
   const records: ImportRecord[] = [];
   const warnings: string[] = [];
+  const unitsSeen = new Set<string>();
 
   for (const raw of rawFiles) {
     const entries: ImportFileEntry[] = JSON.parse(raw);
     for (const entry of entries) {
-      walkVariables(entry.variables, entry.collection, entry.mode, [], records, warnings);
+      walkVariables(entry.variables, entry.collection, entry.mode, [], records, warnings, unitsSeen);
     }
   }
 
-  return { records, warnings };
+  return { records, warnings, unitsSeen: [...unitsSeen].sort() };
 }
 
 /**
@@ -314,15 +326,69 @@ async function findVariableByName(collection: VariableCollection, name: string):
   return variables.find((v): v is Variable => v !== null && v.name === name);
 }
 
+/**
+ * Turns an imported numeric value back into the plain number Figma stores,
+ * honouring the unit when the value carries one.
+ *
+ * A numeric value can carry its unit in either of two spellings, and both are
+ * accepted (including mixed within one file):
+ *
+ * - the DTCG object form the exporter now emits, `{ "value": 16, "unit": "px" }`;
+ * - the `"16px"` string earlier versions emitted, which the exporter still
+ *   offers as an escape hatch.
+ *
+ * From there:
+ *
+ * - `rem`/`em` are font-relative, so the number is multiplied by the root font
+ *   size the user gave: `"2rem"` with a root of 16 becomes 32. The product goes
+ *   through {@link cleanFloat32} so the multiplication can't reintroduce the
+ *   float noise that function exists to strip.
+ * - `px` maps 1:1 onto a Figma number, so the unit is simply dropped.
+ * - Any other unit (`pt`, `vh`, `%`, …) has no Figma equivalent. The unit is
+ *   dropped and the number kept as-is — exactly what every earlier version did
+ *   — but the caller is told so it can warn, since that really is lossy.
+ * - Anything carrying no unit at all (a bare number, or junk) falls through to
+ *   plain `parseFloat`, which is what this function used to be.
+ *
+ * @param raw - The raw `$value`, in whichever shape the file spells it
+ * @param rootFontSize - Already-normalized root font size to multiply `rem`/`em` by
+ * @param onLossyUnit - Called with the unit name when a unit is dropped lossily
+ */
+function parseImportedNumber(
+  raw: unknown,
+  rootFontSize: number,
+  onLossyUnit: (unit: string) => void
+): number {
+  const withUnit = parseUnitValue(raw);
+  if (!withUnit) return parseFloat(String(raw));
+
+  if (isFontRelativeUnit(withUnit.unit)) {
+    return cleanFloat32(withUnit.number * rootFontSize);
+  }
+  if (withUnit.unit !== "px") onLossyUnit(withUnit.unit);
+  return withUnit.number;
+}
+
+/**
+ * Renders a raw `$value` for a warning message. Objects (the DTCG
+ * `{ value, unit }` dimension shape) go through JSON.stringify so the message
+ * says what was actually in the file rather than "[object Object]".
+ */
+function describeRawValue(raw: unknown): string {
+  return typeof raw === "object" && raw !== null ? JSON.stringify(raw) : String(raw);
+}
+
 function parseLiteralValue(
   rawValue: unknown,
-  resolvedType: VariableResolvedDataType
+  resolvedType: VariableResolvedDataType,
+  rootFontSize: number,
+  onLossyUnit: (unit: string) => void
 ): VariableValue {
   switch (resolvedType) {
     case "COLOR":
       return cssColorToRgba(String(rawValue));
     case "FLOAT":
-      return parseFloat(String(rawValue));
+      return parseImportedNumber(rawValue, rootFontSize, onLossyUnit);
     case "BOOLEAN":
       return Boolean(rawValue);
     default:
@@ -470,8 +536,13 @@ function syntheticModeId(collectionName: string, modeName: string): string {
  * created/updated/deleted) are still recorded into `diff` and `summary`.
  * This guarantees the preview a user sees and the run they confirm can
  * never drift apart, since it's the same code path either way.
+ *
+ * `rootFontSize` is what any `rem`/`em` value in the file is multiplied by to
+ * get back to the number Figma stores; it is normalized here so an empty, zero
+ * or non-numeric entry can only ever fall back to 16.
  */
-async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boolean): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boolean, rootFontSize: number): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+  const rootSize = normalizeRootFontSize(rootFontSize);
   const summary: ImportSummary = {
     collectionsCreated: 0,
     collectionsReused: 0,
@@ -485,12 +556,16 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     aliasesResolved: 0,
     codeSyntaxSet: 0,
     warnings: [],
+    unitsSeen: [],
+    hasFontRelativeUnits: false,
   };
 
   const diff: ImportDiff = { collections: [], modes: [], variables: [] };
 
-  const { records, warnings: parseWarnings } = collectRecords(rawFiles);
+  const { records, warnings: parseWarnings, unitsSeen } = collectRecords(rawFiles);
   summary.warnings.push(...parseWarnings);
+  summary.unitsSeen = unitsSeen;
+  summary.hasFontRelativeUnits = unitsSeen.some(isFontRelativeUnit);
 
   if (records.length === 0) {
     summary.warnings.push("No importable variables were found in the selected file(s) — nothing was changed.");
@@ -697,7 +772,11 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     modeRef: ModeRef,
     diffEntry: ImportDiffVariable | undefined
   ): Promise<void> => {
-    const newValue = parseLiteralValue(record.rawValue, record.resolvedType);
+    const newValue = parseLiteralValue(record.rawValue, record.resolvedType, rootSize, (unit) => {
+      summary.warnings.push(
+        `Value "${describeRawValue(record.rawValue)}" for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}) uses "${unit}", which has no Figma equivalent — the unit was dropped and the number imported as-is.`
+      );
+    });
     const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
       ? varRef.real.valuesByMode[modeRef.modeId]
       : undefined;
@@ -904,8 +983,12 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
  * create, update or delete — without touching the document. Safe to call
  * freely for preview purposes.
  */
-export async function previewImport(rawFiles: string[], importMode: ImportMode): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
-  return runImport(rawFiles, importMode, true);
+export async function previewImport(
+  rawFiles: string[],
+  importMode: ImportMode,
+  rootFontSize: number = DEFAULT_ROOT_FONT_SIZE
+): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+  return runImport(rawFiles, importMode, true, rootFontSize);
 }
 
 /**
@@ -918,8 +1001,14 @@ export async function previewImport(rawFiles: string[], importMode: ImportMode):
  * @param importMode - How to reconcile the import against existing local
  *   collections: additive merge, update-existing-only, merge-then-prune
  *   (sync), or wipe-then-import (clean). See {@link ImportMode}.
+ * @param rootFontSize - What a `rem`/`em` value in the file is multiplied by to
+ *   get the number Figma stores. Defaults to 16; an invalid value falls back to it.
  */
-export async function importVariables(rawFiles: string[], importMode: ImportMode): Promise<ImportSummary> {
-  const { summary } = await runImport(rawFiles, importMode, false);
+export async function importVariables(
+  rawFiles: string[],
+  importMode: ImportMode,
+  rootFontSize: number = DEFAULT_ROOT_FONT_SIZE
+): Promise<ImportSummary> {
+  const { summary } = await runImport(rawFiles, importMode, false, rootFontSize);
   return summary;
 }

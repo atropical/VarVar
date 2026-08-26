@@ -76,11 +76,62 @@ export function isDimensionScope(scopes: VariableScope[]): boolean {
 
 /**
  * Whether a variable's scoping is "undecided": it has no scopes at all, or it is
- * left on Figma's default ALL_SCOPES. These are the only cases where a numeric
- * value can be given a unit on request without contradicting an explicit scope —
- * a scope that maps to a non-dimension type (FONT_WEIGHT, OPACITY, …) stays
- * unitless either way.
+ * left on Figma's default ALL_SCOPES.
  */
 export function isUnscoped(scopes: VariableScope[]): boolean {
   return !scopes || scopes.length === 0 || scopes.includes("ALL_SCOPES");
+}
+
+/**
+ * Whether a numeric variable value should be given the export's unit.
+ *
+ * Two separate questions decide this, and they are answered by two separate
+ * controls in the UI:
+ *
+ * - Variables Figma scopes as dimensions always qualify — the unit dropdown
+ *   only decides *which* unit they get.
+ * - Variables left on Figma's default scoping (no scopes, or ALL_SCOPES) only
+ *   qualify when the user asks for it via `appendPxToUnscoped`, which is off by
+ *   default. Nothing about them says they are lengths.
+ *
+ * A scope that maps to a non-dimension type (FONT_WEIGHT, OPACITY, …) stays
+ * unitless whatever either control says — a `rem` font weight is meaningless.
+ * @param scopes - The variable's Figma scopes
+ * @param appendPxToUnscoped - Treat default-scoped variables as dimensions too
+ */
+export function shouldUnitizeNumericValue(
+  scopes: VariableScope[],
+  appendPxToUnscoped: boolean
+): boolean {
+  return isDimensionScope(scopes) || (appendPxToUnscoped && isUnscoped(scopes));
+}
+
+/**
+ * The DTCG `$type` a value is actually emitted under, which has to agree with
+ * the shape of the `$value` beside it.
+ *
+ * {@link resolveScopedType} answers from the scopes alone, which isn't enough
+ * once units are optional: a FONT_SIZE-scoped variable exported with the unit
+ * set to "none" is a bare number, so calling it a `dimension` would be wrong
+ * (DTCG requires a `{value, unit}` object there); and a default-scoped variable
+ * the user chose to unitise really is a `dimension`, not the `number` the
+ * scopes imply. Only FLOAT values are affected — every other type's shape is
+ * independent of units.
+ * @param scopes - The variable's Figma scopes
+ * @param resolvedType - The variable's resolved data type
+ * @param isUnitized - Whether this value is actually being emitted with a unit
+ */
+export function resolveEmittedType(
+  scopes: VariableScope[],
+  resolvedType: VariableResolvedDataType,
+  isUnitized: boolean
+): string {
+  const scopedType = resolveScopedType(scopes, resolvedType);
+  if (resolvedType !== "FLOAT") {
+    return scopedType;
+  }
+  if (isUnitized) {
+    return "dimension";
+  }
+  return scopedType === "dimension" ? "number" : scopedType;
 }

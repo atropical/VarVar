@@ -1,41 +1,124 @@
+/*
+ * Syntax-highlighting palette for the export code preview.
+ *
+ * Theme mechanism
+ * ---------------
+ * The plugin UI is launched with `figma.showUI(__html__, { themeColors: true })`
+ * (src/code.ts), so Figma injects the `--figma-color-*` custom properties into
+ * the plugin iframe and stamps `figma-light` / `figma-dark` on the <html>
+ * element. figma-kit scopes its own dark overrides with `.figma-dark`
+ * (see node_modules/figma-kit/dist/styles.css), so we use the same hook rather
+ * than inventing a parallel signal. `prefers-color-scheme` is kept only as a
+ * belt-and-braces fallback for the case where the class is absent, guarded by
+ * `:not(.figma-light)` so the explicit class always wins.
+ *
+ * Palette
+ * -------
+ * Dark set: the original VS Code Dark+ colours (reported as good — unchanged).
+ * Light set: VS Code Light+ family, darkened where needed so every token colour
+ * reaches WCAG AA (>= 4.5:1) against the preview background `--vv-code-bg`.
+ */
+
+:root {
+    /* Preview surface. Light mode gets an explicit light grey panel; the old
+       rgba(0,0,0,.25) composited to #bfbfbf over Figma's white page background,
+       which no readable palette can sit on (max achievable contrast ~10:1,
+       and every hue fell below AA). */
+    --vv-code-bg: #f0f0f0;
+
+    /* Token colours — light theme (contrast ratios vs #f0f0f0 in comments) */
+    --vv-tok-key: #0451a5;         /* 6.76:1 — navy   */
+    --vv-tok-string: #a31515;      /* 6.89:1 — red    */
+    --vv-tok-number: #137a3a;      /* 4.76:1 — green  */
+    --vv-tok-boolean: #0000ff;     /* 7.54:1 — blue   */
+    --vv-tok-keyword: #9a00c2;     /* 5.84:1 — purple */
+    --vv-tok-comment: #5b6b7c;     /* 4.80:1 — slate  */
+    --vv-tok-punctuation: #595959; /* 6.15:1 — grey   */
+    --vv-tok-hex: #0a6375;         /* 6.03:1 — cyan   */
+    --vv-tok-function: #795e26;    /* 5.35:1 — olive  */
+
+    --vv-scrollbar-thumb: rgba(0, 0, 0, 0.3);
+    --vv-scrollbar-thumb-hover: rgba(0, 0, 0, 0.45);
+}
+
+/* Dark theme — unchanged VS Code Dark+ palette. Ratios vs the composited
+   preview background #212121 (rgba(0,0,0,.25) over --figma-color-bg #2c2c2c):
+   key 10.80, string 6.09, number 9.48, boolean 5.46, keyword 5.79,
+   comment 4.83, hex 7.98, function 11.39 — all AA. */
+@media (prefers-color-scheme: dark) {
+    :root:not(.figma-light) {
+        --vv-code-bg: rgba(0, 0, 0, 0.25);
+
+        --vv-tok-key: #9cdcfe;
+        --vv-tok-string: #ce9178;
+        --vv-tok-number: #b5cea8;
+        --vv-tok-boolean: #569cd6;
+        --vv-tok-keyword: #c586c0;
+        --vv-tok-comment: #6a9955;
+        --vv-tok-punctuation: var(--figma-color-text-secondary);
+        --vv-tok-hex: #4fc1ff;
+        --vv-tok-function: #dcdcaa;
+
+        --vv-scrollbar-thumb: rgba(255, 255, 255, 0.25);
+        --vv-scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+    }
+}
+
+.figma-dark {
+    --vv-code-bg: rgba(0, 0, 0, 0.25);
+
+    --vv-tok-key: #9cdcfe;
+    --vv-tok-string: #ce9178;
+    --vv-tok-number: #b5cea8;
+    --vv-tok-boolean: #569cd6;
+    --vv-tok-keyword: #c586c0;
+    --vv-tok-comment: #6a9955;
+    --vv-tok-punctuation: var(--figma-color-text-secondary);
+    --vv-tok-hex: #4fc1ff;
+    --vv-tok-function: #dcdcaa;
+
+    --vv-scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    --vv-scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+}
+
 .vv-tok-key,
 .vv-tok-property,
 .vv-tok-selector {
-    color: #9cdcfe;
+    color: var(--vv-tok-key);
 }
 
 .vv-tok-string {
-    color: #ce9178;
+    color: var(--vv-tok-string);
 }
 
 .vv-tok-number {
-    color: #b5cea8;
+    color: var(--vv-tok-number);
 }
 
 .vv-tok-boolean {
-    color: #569cd6;
+    color: var(--vv-tok-boolean);
 }
 
 .vv-tok-keyword,
 .vv-tok-atrule {
-    color: #c586c0;
+    color: var(--vv-tok-keyword);
 }
 
 .vv-tok-comment {
-    color: #6a9955;
+    color: var(--vv-tok-comment);
     font-style: italic;
 }
 
 .vv-tok-punctuation {
-    color: var(--figma-color-text-secondary);
+    color: var(--vv-tok-punctuation);
 }
 
 .vv-tok-hex {
-    color: #4fc1ff;
+    color: var(--vv-tok-hex);
 }
 
 .vv-tok-function {
-    color: #dcdcaa;
+    color: var(--vv-tok-function);
 }
 
 .vv-tok-identifier {
@@ -66,7 +149,7 @@
 }
 
 #varvar-exported-output {
-    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    scrollbar-color: var(--vv-scrollbar-thumb) transparent;
     scrollbar-width: thin;
 }
 
@@ -80,12 +163,12 @@
 }
 
 #varvar-exported-output::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.25);
+    background-color: var(--vv-scrollbar-thumb);
     border-radius: 8px;
     border: 2px solid transparent;
     background-clip: padding-box;
 }
 
 #varvar-exported-output::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.4);
+    background-color: var(--vv-scrollbar-thumb-hover);
 }
