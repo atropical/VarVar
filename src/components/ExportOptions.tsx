@@ -2,7 +2,8 @@ import React from "react";
 import { Flex, Switch, Label, Select, Input, Text } from "figma-kit";
 import { OutputFormats, MessageTypes } from "../types.d";
 import type { ExportUnit } from "../types.d";
-import { EXPORT_UNITS } from "../utils/units";
+import { EXPORT_UNITS, normalizeRootFontSize } from "../utils/units";
+import { formatFloat32 } from "../utils/numberFormat";
 import { HelpTip } from "./HelpTip";
 
 interface ExportOptionsProps {
@@ -91,9 +92,17 @@ const ExternalLink: React.FC<{ href: string; children: React.ReactNode }> = ({ h
 /**
  * Footnote text for the unit dropdown, per format. Only CSS/Tailwind and JSON
  * offer it: CSV and JS both emit bare numbers by design.
+ *
+ * The "rem" example is worked from the root font size actually in the field,
+ * so it stays true when that is changed: a fixed "32 becomes 2rem" would be
+ * wrong the moment someone typed 10.
  */
-const unitFootnote = (format: OutputFormats): string => {
-    const shared = "Applies to number variables Figma scopes as a dimension; anything scoped otherwise (font weight, opacity) stays unitless. \"rem\" divides by the root font size, so 32 becomes 2rem.";
+const unitFootnote = (format: OutputFormats, exportUnit: ExportUnit, rootFontSize: string): string => {
+    const root = normalizeRootFontSize(rootFontSize);
+    const remExample = exportUnit === "rem"
+        ? ` "rem" divides by the root font size, so with ${formatFloat32(root)} a variable of ${formatFloat32(root * 2)} exports as 2rem.`
+        : "";
+    const shared = `Applies to number variables Figma scopes as a dimension; anything scoped otherwise (font weight, opacity) stays unitless.${remExample}`;
     return format === OutputFormats.CSS
         ? shared
         : `${shared} "None" emits a bare number, tagged as a number rather than a dimension.`;
@@ -271,7 +280,7 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                             </Flex>
                         )}
                     </Flex>
-                    <Footnote indent={false}>{unitFootnote(format)}</Footnote>
+                    <Footnote indent={false}>{unitFootnote(format, exportUnit, rootFontSize)}</Footnote>
                 </Flex>
             )}
 
