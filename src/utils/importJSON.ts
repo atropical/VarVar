@@ -1,6 +1,8 @@
 import { cssColorToRgba, rgbToCssColor } from "./color";
+import { CODE_SYNTAX_PLATFORMS, normalizeCodeSyntax } from "./variableUtils";
+import type { CodeSyntaxMap } from "./variableUtils";
 import { ImportMode } from "../types.d";
-import type { ImportSummary, ImportDiff, ImportDiffVariable } from "../types.d";
+import type { ImportSummary, ImportDiff, ImportDiffVariable, ImportDiffCodeSyntax } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
 
@@ -33,6 +35,7 @@ interface ImportRecord {
   resolvedType: VariableResolvedDataType;
   scopes: VariableScope[];
   description: string;
+  codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
 }
 
@@ -56,9 +59,10 @@ function normalizeLeaf(node: Record<string, unknown>): {
   resolvedType: VariableResolvedDataType | undefined;
   scopes: VariableScope[];
   description: string;
+  codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
 } {
-  const extensions = node.$extensions as { figma?: { scopes?: VariableScope[]; resolvedType?: VariableResolvedDataType } } | undefined;
+  const extensions = node.$extensions as { figma?: { scopes?: VariableScope[]; resolvedType?: VariableResolvedDataType; codeSyntax?: CodeSyntaxMap } } | undefined;
   const figma = extensions?.figma;
 
   const rawType = node.$type as string | undefined;
@@ -68,8 +72,11 @@ function normalizeLeaf(node: Record<string, unknown>): {
 
   const scopes = figma?.scopes ?? (node.$scopes as VariableScope[] | undefined) ?? [];
   const description = (node.$description as string) ?? "";
+  // Absent in legacy (v2.x) and plain DTCG files, so it stays optional
+  // throughout — a file that says nothing about code syntax never touches it.
+  const codeSyntax = normalizeCodeSyntax(figma?.codeSyntax);
 
-  return { resolvedType, scopes, description, rawValue: node.$value };
+  return { resolvedType, scopes, description, codeSyntax, rawValue: node.$value };
 }
 
 function walkVariables(
@@ -82,7 +89,7 @@ function walkVariables(
 ): void {
   for (const [key, node] of Object.entries(variables)) {
     if (isTokenLeaf(node)) {
-      const { resolvedType, scopes, description, rawValue } = normalizeLeaf(node);
+      const { resolvedType, scopes, description, codeSyntax, rawValue } = normalizeLeaf(node);
       const path = [...pathParts, key].join("/");
       if (!resolvedType || !validTypes.has(resolvedType)) {
         warnings.push(`Skipped "${path}" in "${collectionName}" (${modeName}): unrecognized or unsupported $type "${String(node.$type)}".`);
@@ -95,6 +102,7 @@ function walkVariables(
         resolvedType,
         scopes,
         description,
+        codeSyntax,
         rawValue,
       });
     } else if (typeof node === "object" && node !== null) {
@@ -122,8 +130,16 @@ function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings
 }
 
 /**
- * True if this is the plugin's `$.Collection.Mode.path` alias-reference
- * convention (as opposed to a literal value or `"_unlinked"`).
+ * True if this value *could* be the plugin's `$.Collection.Mode.path`
+ * alias-reference convention (as opposed to a literal value or `"_unlinked"`).
+ *
+ * For COLOR/FLOAT/BOOLEAN tokens the `"$."` prefix can only ever be a
+ * reference. For a STRING token it's genuinely ambiguous: a string variable's
+ * real value can legitimately start with `"$."`. Such a value is therefore
+ * treated only as a *candidate* alias — the phase-3 loop writes it back as a
+ * plain string literal (using the token's declared resolved type) when it
+ * doesn't resolve against any known collection/mode/variable, instead of
+ * dropping it with a warning.
  */
 function isAliasValue(value: unknown): value is string {
   return typeof value === "string" && value.startsWith("$.") && value !== "_unlinked";
@@ -136,30 +152,109 @@ interface AliasTarget {
 }
 
 /**
- * Splits `body` on the longest name in `names` that it starts with, as
- * `"<name>.<rest>"`. Matching against known names (rather than blindly
- * splitting on every "." ) is what lets collection/mode/group names that
+ * Every way `body` can be read as `"<name>.<rest>"` for some name in `names`,
+ * longest name first. Matching against known names (rather than blindly
+ * splitting on every ".") is what lets collection and mode names that
  * themselves contain literal dots round-trip correctly.
+ *
+ * All matches are returned, not just the longest, because a mode name can
+ * collide with the leading group segment of a variable path: a collection with
+ * modes `A` and `A.B` holding a variable `B/x` in mode `A` exports as
+ * `$.C.A.B.x`, which reads equally well as mode `A.B` + path `x`. The caller
+ * validates each reading in turn against real variables.
  */
-function splitOnKnownName(body: string, names: string[]): { name: string; rest: string } | undefined {
+function splitsOnKnownNames(body: string, names: string[]): { name: string; rest: string }[] {
   const sorted = [...names].sort((a, b) => b.length - a.length);
+  const splits: { name: string; rest: string }[] = [];
   for (const name of sorted) {
     if (body.startsWith(`${name}.`)) {
-      return { name, rest: body.slice(name.length + 1) };
+      splits.push({ name, rest: body.slice(name.length + 1) });
     }
   }
-  return undefined;
+  return splits;
+}
+
+/**
+ * Caps on how many readings of a single alias reference are enumerated. The
+ * number of ways to unflatten a path is exponential in its dot count
+ * (2^dots), so a deeply nested path would otherwise explode. Both limits are
+ * generous relative to real token paths — a 6-level path is fully covered —
+ * and truncation only ever drops the *least* specific readings, since
+ * candidates are generated most-specific first.
+ */
+const MAX_PATH_VARIANTS_PER_MODE = 64;
+const MAX_ALIAS_CANDIDATES = 512;
+
+/**
+ * Every way the flattened tail of an alias reference can be read back as a
+ * variable path, most-specific first.
+ *
+ * Export flattens a variable's "/" separators to "." (`resolveAliasValue` in
+ * collectionToJSON.ts), which is lossy: a variable actually named
+ * `color.primary/base` and one named `color/primary/base` both export as
+ * `color.primary.base`. Each "." in the tail is therefore either a group
+ * separator or a literal dot in a name, so every combination is a plausible
+ * reading. They're yielded in order of decreasing separator count, which puts
+ * the historic "every dot is a separator" interpretation first — so any
+ * reference that resolves today still resolves to exactly the same variable.
+ */
+function pathVariants(rest: string, limit: number): string[] {
+  const dotIndices: number[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    if (rest[i] === ".") dotIndices.push(i);
+  }
+  if (dotIndices.length === 0) return [rest];
+
+  const build = (literalDots: number[]): string => {
+    const literal = new Set(literalDots);
+    let out = "";
+    let cursor = 0;
+    for (let i = 0; i < dotIndices.length; i += 1) {
+      out += rest.slice(cursor, dotIndices[i]);
+      out += literal.has(i) ? "." : "/";
+      cursor = dotIndices[i] + 1;
+    }
+    return out + rest.slice(cursor);
+  };
+
+  const variants: string[] = [];
+  // `keptLiteral` ascending == separator count descending == most specific first.
+  for (let keptLiteral = 0; keptLiteral <= dotIndices.length && variants.length < limit; keptLiteral += 1) {
+    const combo: number[] = [];
+    // Returns false once the limit is hit, unwinding the recursion.
+    const emit = (start: number): boolean => {
+      if (combo.length === keptLiteral) {
+        variants.push(build(combo));
+        return variants.length < limit;
+      }
+      for (let i = start; i < dotIndices.length; i += 1) {
+        combo.push(i);
+        const more = emit(i + 1);
+        combo.pop();
+        if (!more) return false;
+      }
+      return true;
+    };
+    emit(0);
+  }
+  return variants;
 }
 
 /**
  * Resolves a `$.Collection.Mode.path` (or same-collection `$..Mode.path`)
  * alias-reference string into every plausible `{collection, mode, path}`
- * interpretation, most-specific first. The convention's own "." separator
- * is ambiguous with a literal "." inside a collection/mode/group name (e.g.
- * a collection named ".Brand"), so this can't be resolved by string-splitting
- * alone — instead it's matched against the actual known collection/mode
- * names, and the caller validates each candidate against real variables
- * until one resolves.
+ * interpretation, most-specific first. The convention's own "." separator is
+ * ambiguous with a literal "." inside a collection, mode or variable name
+ * (e.g. a collection named ".Brand", or a variable named `color.primary`), so
+ * this can't be resolved by string-splitting alone — instead the collection
+ * and mode segments are matched against the actual known names, the variable
+ * tail is expanded into every possible group/name split, and the caller
+ * validates each candidate against real variables until one resolves.
+ *
+ * Candidate order is stable and starts with exactly what earlier versions
+ * produced (longest collection name, longest mode name, every dot in the tail
+ * read as a group separator), so files exported by older versions import
+ * identically.
  */
 function resolveAliasCandidates(
   value: string,
@@ -169,6 +264,16 @@ function resolveAliasCandidates(
   const remainder = value.slice(2);
   const candidates: AliasTarget[] = [];
 
+  const pushSplits = (collectionName: string, body: string, modeNames: string[]): void => {
+    for (const split of splitsOnKnownNames(body, modeNames)) {
+      if (candidates.length >= MAX_ALIAS_CANDIDATES) return;
+      const budget = Math.min(MAX_PATH_VARIANTS_PER_MODE, MAX_ALIAS_CANDIDATES - candidates.length);
+      for (const path of pathVariants(split.rest, budget)) {
+        candidates.push({ collectionName, modeName: split.name, path });
+      }
+    }
+  };
+
   // Explicit "$.Collection.Mode.path" form — tried first since matching an
   // actual known collection name is stronger evidence than the generic
   // same-collection fallback below.
@@ -176,20 +281,14 @@ function resolveAliasCandidates(
   for (const collectionName of collectionNames) {
     if (!remainder.startsWith(`${collectionName}.`)) continue;
     const rest = remainder.slice(collectionName.length + 1);
-    const split = splitOnKnownName(rest, collectionRefsByName.get(collectionName)!.modes.map((m) => m.name));
-    if (split) {
-      candidates.push({ collectionName, modeName: split.name, path: split.rest.replace(/\./g, "/") });
-    }
+    pushSplits(collectionName, rest, collectionRefsByName.get(collectionName)!.modes.map((m) => m.name));
   }
 
   // Same-collection "$..Mode.path" form (empty collection segment).
   if (remainder.startsWith(".")) {
     const currentCollection = collectionRefsByName.get(currentCollectionName);
     if (currentCollection) {
-      const split = splitOnKnownName(remainder.slice(1), currentCollection.modes.map((m) => m.name));
-      if (split) {
-        candidates.push({ collectionName: currentCollectionName, modeName: split.name, path: split.rest.replace(/\./g, "/") });
-      }
+      pushSplits(currentCollectionName, remainder.slice(1), currentCollection.modes.map((m) => m.name));
     }
   }
 
@@ -279,6 +378,60 @@ function aliasValueEquals(before: VariableValue | undefined, targetId: string | 
   return before.id === targetId;
 }
 
+/**
+ * Itemizes what the file's code syntax would change on a variable, one entry
+ * per platform the file actually carries. Platforms the file says nothing
+ * about are left alone — same as scopes, an import only ever adds or updates
+ * what it was given, it never clears an override the document already has.
+ * @param existing - The variable's current `codeSyntax` (absent for a create)
+ * @param incoming - The normalized `$extensions.figma.codeSyntax` from the file
+ */
+function buildCodeSyntaxDiff(
+  existing: CodeSyntaxMap | undefined,
+  incoming: CodeSyntaxMap | undefined
+): ImportDiffCodeSyntax[] {
+  if (!incoming) return [];
+
+  const entries: ImportDiffCodeSyntax[] = [];
+  for (const platform of CODE_SYNTAX_PLATFORMS) {
+    const after = incoming[platform];
+    if (typeof after !== "string" || after === "") continue;
+    const before = existing ? existing[platform] : undefined;
+    entries.push({ platform, before, after, changed: before !== after });
+  }
+  return entries;
+}
+
+/**
+ * Writes the changed code-syntax entries onto a variable. A platform Figma
+ * refuses is collected as a warning rather than aborting the import, like
+ * every other per-variable write here.
+ * @param variable - The variable to write to
+ * @param entries - The diff produced by {@link buildCodeSyntaxDiff}
+ * @param summary - Run summary, for the counter and any warnings
+ * @param collectionName - Collection name, for warning text
+ * @param path - Variable path, for warning text
+ */
+function applyCodeSyntax(
+  variable: Variable,
+  entries: ImportDiffCodeSyntax[],
+  summary: ImportSummary,
+  collectionName: string,
+  path: string
+): void {
+  for (const entry of entries) {
+    if (!entry.changed) continue;
+    try {
+      variable.setVariableCodeSyntax(entry.platform, entry.after);
+      summary.codeSyntaxSet += 1;
+    } catch (err) {
+      summary.warnings.push(
+        `Failed to set ${entry.platform} code syntax for "${path}" in "${collectionName}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+}
+
 function scopesEqual(a: VariableScope[], b: VariableScope[]): boolean {
   if (a.length !== b.length) return false;
   const setB = new Set(b);
@@ -330,6 +483,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     variablesDeleted: 0,
     valuesSet: 0,
     aliasesResolved: 0,
+    codeSyntaxSet: 0,
     warnings: [],
   };
 
@@ -477,17 +631,23 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
       varRef = { path: varName, collectionName: record.collectionName, real: existingVariable, isNew: false, resolvedType: existingVariable.resolvedType };
       diffEntry = { collectionName: record.collectionName, path: varName, action: "update", resolvedType: record.resolvedType, values: [] };
 
-      // Only touch description/scopes — and only count this as a real
-      // update — when they actually differ, so an unchanged re-import of an
-      // identical file is a true no-op rather than a no-op-with-a-write.
+      // Only touch description/scopes/code syntax — and only count this as a
+      // real update — when they actually differ, so an unchanged re-import of
+      // an identical file is a true no-op rather than a no-op-with-a-write.
       const willWriteScopes = record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES");
       const descriptionChanged = existingVariable.description !== record.description;
       const scopesChanged = willWriteScopes && !scopesEqual(existingVariable.scopes, record.scopes);
-      metadataChangedByPath.set(pathKey, descriptionChanged || scopesChanged);
+      const codeSyntaxDiff = buildCodeSyntaxDiff(existingVariable.codeSyntax, record.codeSyntax);
+      const codeSyntaxChanged = codeSyntaxDiff.some((entry) => entry.changed);
+      if (codeSyntaxDiff.length > 0) diffEntry.codeSyntax = codeSyntaxDiff;
+      metadataChangedByPath.set(pathKey, descriptionChanged || scopesChanged || codeSyntaxChanged);
 
-      if (!dryRun && varRef.real) {
+      if (dryRun) {
+        summary.codeSyntaxSet += codeSyntaxDiff.filter((entry) => entry.changed).length;
+      } else if (varRef.real) {
         if (descriptionChanged) varRef.real.description = record.description;
         if (scopesChanged) varRef.real.scopes = record.scopes;
+        applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
     } else {
       // Update-only never creates a variable that doesn't already exist.
@@ -503,11 +663,19 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
       diffEntry = { collectionName: record.collectionName, path: varName, action: "create", resolvedType: record.resolvedType, values: [] };
       summary.variablesCreated += 1;
 
-      if (!dryRun && varRef.real) {
+      // A brand-new variable has no code syntax of its own yet, so everything
+      // the file carries is a change.
+      const codeSyntaxDiff = buildCodeSyntaxDiff(undefined, record.codeSyntax);
+      if (codeSyntaxDiff.length > 0) diffEntry.codeSyntax = codeSyntaxDiff;
+
+      if (dryRun) {
+        summary.codeSyntaxSet += codeSyntaxDiff.length;
+      } else if (varRef.real) {
         varRef.real.description = record.description;
         if (record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES")) {
           varRef.real.scopes = record.scopes;
         }
+        applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
     }
 
@@ -517,6 +685,46 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
   }
 
   // --- Phase 3: values (literals first, then aliases so every variable already exists) ---
+
+  /**
+   * Records and (outside dry-run) writes one literal value for one mode.
+   * Shared by the literal pass and by the alias pass's fallback for a STRING
+   * token whose value merely *looks* like an alias reference.
+   */
+  const applyLiteralValue = async (
+    record: ImportRecord,
+    varRef: VariableRef,
+    modeRef: ModeRef,
+    diffEntry: ImportDiffVariable | undefined
+  ): Promise<void> => {
+    const newValue = parseLiteralValue(record.rawValue, record.resolvedType);
+    const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
+      ? varRef.real.valuesByMode[modeRef.modeId]
+      : undefined;
+    const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
+    const after = formatLiteral(newValue, record.resolvedType);
+
+    const changed = !literalValueEquals(beforeRaw, newValue, record.resolvedType);
+    diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
+
+    // Skip the write entirely when the stored value already matches — a
+    // re-import of an unchanged file shouldn't touch the document at all.
+    if (!changed) return;
+
+    if (dryRun) {
+      summary.valuesSet += 1;
+    } else if (varRef.real) {
+      try {
+        varRef.real.setValueForMode(modeRef.modeId, newValue);
+        summary.valuesSet += 1;
+      } catch (err) {
+        summary.warnings.push(
+          `Failed to set value for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  };
+
   const aliasRecords: ImportRecord[] = [];
 
   for (const record of records) {
@@ -540,33 +748,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     const modeRef = collRef.modes.find((m) => m.name === record.modeName);
     if (!modeRef) continue;
 
-    const newValue = parseLiteralValue(record.rawValue, record.resolvedType);
-    const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
-      ? varRef.real.valuesByMode[modeRef.modeId]
-      : undefined;
-    const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
-    const after = formatLiteral(newValue, record.resolvedType);
-
-    const changed = !literalValueEquals(beforeRaw, newValue, record.resolvedType);
-    const diffEntry = variableDiffByPath.get(pathKey);
-    diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
-
-    // Skip the write entirely when the stored value already matches — a
-    // re-import of an unchanged file shouldn't touch the document at all.
-    if (!changed) continue;
-
-    if (dryRun) {
-      summary.valuesSet += 1;
-    } else if (varRef.real) {
-      try {
-        varRef.real.setValueForMode(modeRef.modeId, newValue);
-        summary.valuesSet += 1;
-      } catch (err) {
-        summary.warnings.push(
-          `Failed to set value for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
-    }
+    await applyLiteralValue(record, varRef, modeRef, variableDiffByPath.get(pathKey));
   }
 
   for (const record of aliasRecords) {
@@ -604,6 +786,15 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     const diffEntry = variableDiffByPath.get(pathKey);
 
     if (!resolvedTarget) {
+      // A STRING variable's real value can legitimately start with "$." — the
+      // prefix alone never proves it's a reference. Having failed to match any
+      // known collection/mode/variable, take the declared type at its word and
+      // keep the value as the plain string it almost certainly is, rather than
+      // discarding it.
+      if (record.resolvedType === "STRING") {
+        await applyLiteralValue(record, varRef, modeRef, diffEntry);
+        continue;
+      }
       summary.warnings.push(
         `Could not resolve alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): value "${record.rawValue}" did not match any known collection/mode/variable.`
       );
@@ -639,9 +830,9 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
   }
 
   // Reconcile "update" entries against what actually changed: a matched
-  // variable whose description, scopes and every mode's value already equal
-  // the file is a true no-op, not an update, whether or not the import
-  // touched the document.
+  // variable whose description, scopes, code syntax and every mode's value
+  // already equal the file is a true no-op, not an update, whether or not the
+  // import touched the document.
   for (const [pathKey, diffEntry] of variableDiffByPath) {
     if (diffEntry.action !== "update") continue;
     const anyValueChanged = diffEntry.values.some((v) => v.changed);

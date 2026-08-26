@@ -46,7 +46,7 @@ async function handleBasicInfo(command?: PluginCommands) {
 /**
  * Handles export requests with format-specific logic
  */
-async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false, useLegacyFormat: boolean = false) {
+async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boolean = false, useTailwindFormat: boolean = false, useLegacyFormat: boolean = false, useSingleDashSeparator: boolean = false, useCodeSyntaxName: boolean = false, appendPxToUnscoped: boolean = false) {
     try {
         let data: string | undefined;
         let files: ExportFile[] | undefined;
@@ -78,12 +78,14 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
                 break;
             }
             case OutputFormats.JS: {
-                const js = await exportToJS() || '';
+                const js = await exportToJS(useCodeSyntaxName) || '';
                 data = useLegacyFormat ? toLegacyJS(js) : js;
                 break;
             }
             case OutputFormats.CSS:
-                data = useTailwindFormat ? await exportToTailwind() : await exportToCSS();
+                data = useTailwindFormat
+                    ? await exportToTailwind(useSingleDashSeparator, useCodeSyntaxName, appendPxToUnscoped)
+                    : await exportToCSS(useSingleDashSeparator, useCodeSyntaxName, appendPxToUnscoped);
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
@@ -176,7 +178,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
         case MessageTypes.EXPORT_SUCCESS:
             if (msg.format) {
-                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false, msg.useLegacyFormat || false);
+                await handleExport(msg.format, msg.useLinkedVarRowAndColPos || false, msg.useTailwindFormat || false, msg.useLegacyFormat || false, msg.useSingleDashSeparator || false, msg.useCodeSyntaxName || false, msg.appendPxToUnscoped || false);
             } else {
                 console.error('Export request missing format');
             }

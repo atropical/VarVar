@@ -73,3 +73,14 @@ export function isDimensionScope(scopes: VariableScope[]): boolean {
     return entry !== undefined && entry.dimension === true;
   });
 }
+
+/**
+ * Whether a variable's scoping is "undecided": it has no scopes at all, or it is
+ * left on Figma's default ALL_SCOPES. These are the only cases where a numeric
+ * value can be given a unit on request without contradicting an explicit scope —
+ * a scope that maps to a non-dimension type (FONT_WEIGHT, OPACITY, …) stays
+ * unitless either way.
+ */
+export function isUnscoped(scopes: VariableScope[]): boolean {
+  return !scopes || scopes.length === 0 || scopes.includes("ALL_SCOPES");
+}

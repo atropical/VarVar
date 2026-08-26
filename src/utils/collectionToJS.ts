@@ -1,21 +1,80 @@
 import { rgbToCssColor } from "./color";
 import { toCamelCase } from "./stringTransformation";
-import { getMatchingModeName } from "./variableUtils";
+import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
+import type { CodeSyntaxMap } from "./variableUtils";
 import { resolveScopedType } from "./scopeToDTCG";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
+
+/** A property name that can be written unquoted in the emitted object literal. */
+const JS_IDENTIFIER = /^[$A-Za-z_][$A-Za-z0-9_]*$/;
+
+/**
+ * Resolves the property path a variable is emitted under, as camelCased
+ * segments of its Figma name.
+ *
+ * With the code-syntax option on, a `codeSyntax.WEB` override replaces the
+ * whole path with a single key (the override is the variable's name in code,
+ * groups included), stripped of the leading `--` Figma users commonly type.
+ * JavaScript can't spell an arbitrary CSS custom property name as a property
+ * path, so an override that isn't already a valid identifier is camelCased,
+ * and one that still isn't falls back to the derived path.
+ * @param figVar - The Figma variable being named
+ * @param useCodeSyntaxName - Whether the Web code syntax should drive the name
+ */
+function resolveJsNameParts(figVar: Variable, useCodeSyntaxName: boolean): string[] {
+  if (useCodeSyntaxName) {
+    const override = figVar.codeSyntax?.WEB;
+    const bare = typeof override === "string" ? override.trim().replace(/^--/, "") : "";
+    if (bare !== "") {
+      if (JS_IDENTIFIER.test(bare)) {
+        return [bare];
+      }
+      const camelCased = toCamelCase(bare);
+      if (JS_IDENTIFIER.test(camelCased)) {
+        return [camelCased];
+      }
+    }
+  }
+  return figVar.name.split("/").map((str) => toCamelCase(str));
+}
+
+/**
+ * Builds one variable's emitted value object. `codeSyntax` is included
+ * whenever the variable carries any platform override, so the JS output stays
+ * as lossless as the JSON one.
+ * @param value - The already-formatted value (literal or alias property path)
+ * @param description - The variable's description, omitted when empty
+ * @param dtcgType - The DTCG type resolved from the variable's scopes
+ * @param codeSyntax - The variable's non-empty code syntax overrides, if any
+ * @param inherited - Extended-collection inheritance flag, omitted for base collections
+ */
+function buildJsValueEntry(
+  value: unknown,
+  description: string,
+  dtcgType: string,
+  codeSyntax: CodeSyntaxMap | undefined,
+  inherited?: boolean
+): Record<string, unknown> {
+  const entry: Record<string, unknown> = { value };
+  if (description) entry.description = description;
+  entry.dtcgType = dtcgType;
+  if (inherited !== undefined) entry.inherited = inherited;
+  if (codeSyntax) entry.codeSyntax = codeSyntax;
+  return entry;
+}
 
 /**
  * Builds a JS property-path reference (e.g. "brand.mode.color.primary.value")
  * to another variable, prefixed with its collection when it differs from the
  * referencing collection
- * @param targetVarName - The slash-separated name of the referenced variable
+ * @param targetParts - The emitted property-path segments of the referenced variable
  * @param targetModeName - The mode name to reference in the target collection
  * @param targetCollectionName - The name of the collection the variable lives in
  * @param currentCollectionName - The name of the collection containing the reference
  */
 function buildJsAliasPath(
-  targetVarName: string,
+  targetParts: string[],
   targetModeName: string,
   targetCollectionName: string,
   currentCollectionName: string
@@ -23,7 +82,7 @@ function buildJsAliasPath(
   const collPrefix = targetCollectionName !== currentCollectionName
     ? `${toCamelCase(targetCollectionName)}.`
     : '';
-  return `${collPrefix}${toCamelCase(targetModeName)}.${targetVarName.split('/').map((str) => toCamelCase(str)).join('.')}.value`;
+  return `${collPrefix}${toCamelCase(targetModeName)}.${targetParts.join('.')}.value`;
 }
 
 /**
@@ -49,13 +108,14 @@ function serializeVariablesAsJs(collectionName: string, variables: Record<string
 /**
  * Processes a variable collection into JavaScript format
  * @param collection - The variable collection to process
+ * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
  * @returns JavaScript export string for the collection
  */
 async function processCollection({
     name,
     modes,
     variableIds,
-}: VariableCollection): Promise<string> {
+}: VariableCollection, useCodeSyntaxName: boolean): Promise<string> {
   const variables: Record<string, any> = {};
 
   for (const mode of modes) {
@@ -64,13 +124,14 @@ async function processCollection({
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
+        const { name, resolvedType, valuesByMode, scopes, description, codeSyntax }: Variable = figVar;
         const value: VariableValue = valuesByMode[mode.modeId];
         const dtcgType = resolveScopedType(scopes, resolvedType);
+        const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           let currentObj = variables[toCamelCase(mode.name)];
-          const parts = name.split("/").map((str) => toCamelCase(str));
+          const parts = resolveJsNameParts(figVar, useCodeSyntaxName);
 
           for (let i = 0, partsLength=parts.length; i < partsLength; i++) {
             const part = parts[i];
@@ -85,14 +146,12 @@ async function processCollection({
                     ? getMatchingModeName(mode.name, linkedVarCollection)
                     : mode.name;
                   const aliasValue = buildJsAliasPath(
-                    linkedVar.name,
+                    resolveJsNameParts(linkedVar, useCodeSyntaxName),
                     matchedModeName,
                     linkedVarCollection ? linkedVarCollection.name : name,
                     name
                   );
-                  currentObj[part] = description
-                    ? { value: aliasValue, description, dtcgType }
-                    : { value: aliasValue, dtcgType };
+                  currentObj[part] = buildJsValueEntry(aliasValue, description, dtcgType, usedCodeSyntax);
                 } else {
                   currentObj[part] = '_unlinked';
                 }
@@ -105,9 +164,7 @@ async function processCollection({
                       ? Boolean(value)
                       : String(value);
 
-                currentObj[part] = description
-                  ? { value: processedValue, description, dtcgType }
-                  : { value: processedValue, dtcgType };
+                currentObj[part] = buildJsValueEntry(processedValue, description, dtcgType, usedCodeSyntax);
               }
             }
             else {
@@ -129,9 +186,10 @@ async function processCollection({
  * everything else becomes a property-path reference into the parent
  * collection's export.
  * @param extCollection - The extended variable collection to process
+ * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
  * @returns JavaScript export string for the extended collection
  */
-async function processExtendedCollection(extCollection: ExtendedVariableCollection): Promise<string> {
+async function processExtendedCollection(extCollection: ExtendedVariableCollection, useCodeSyntaxName: boolean): Promise<string> {
   const { name, modes, variableIds, variableOverrides, parentVariableCollectionId } = extCollection;
   const variables: Record<string, any> = {};
   const parentCollection = await figma.variables.getVariableCollectionByIdAsync(parentVariableCollectionId);
@@ -145,10 +203,11 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name: varName, resolvedType, scopes, description }: Variable = figVar;
+        const { name: varName, resolvedType, scopes, description, codeSyntax }: Variable = figVar;
 
         if (validTypes.has(resolvedType)) {
           const dtcgType = resolveScopedType(scopes, resolvedType);
+          const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
           const overridesForVar = variableOverrides[variableId];
           const overrideValue: VariableValue | undefined = overridesForVar
             ? overridesForVar[mode.modeId]
@@ -156,7 +215,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           const isInherited = overrideValue === undefined;
 
           let currentObj = variables[toCamelCase(mode.name)];
-          const parts = varName.split("/").map((str) => toCamelCase(str));
+          const parts = resolveJsNameParts(figVar, useCodeSyntaxName);
 
           for (let i = 0, partsLength = parts.length; i < partsLength; i++) {
             const part = parts[i];
@@ -165,10 +224,8 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
               if (isInherited) {
                 const parentModeName = parentMode ? parentMode.name : mode.name;
                 const parentCollName = parentCollection ? parentCollection.name : name;
-                const aliasValue = buildJsAliasPath(varName, parentModeName, parentCollName, name);
-                currentObj[part] = description
-                  ? { value: aliasValue, description, dtcgType, inherited: true }
-                  : { value: aliasValue, dtcgType, inherited: true };
+                const aliasValue = buildJsAliasPath(parts, parentModeName, parentCollName, name);
+                currentObj[part] = buildJsValueEntry(aliasValue, description, dtcgType, usedCodeSyntax, true);
               }
               else if (typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS') {
                 const linkedVar = await figma.variables.getVariableByIdAsync(overrideValue.id);
@@ -179,14 +236,12 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
                     ? getMatchingModeName(mode.name, linkedVarCollection)
                     : mode.name;
                   const aliasValue = buildJsAliasPath(
-                    linkedVar.name,
+                    resolveJsNameParts(linkedVar, useCodeSyntaxName),
                     matchedModeName,
                     linkedVarCollection ? linkedVarCollection.name : name,
                     name
                   );
-                  currentObj[part] = description
-                    ? { value: aliasValue, description, dtcgType, inherited: false }
-                    : { value: aliasValue, dtcgType, inherited: false };
+                  currentObj[part] = buildJsValueEntry(aliasValue, description, dtcgType, usedCodeSyntax, false);
                 } else {
                   currentObj[part] = '_unlinked';
                 }
@@ -200,9 +255,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
                       ? Boolean(overrideValue)
                       : String(overrideValue);
 
-                currentObj[part] = description
-                  ? { value: processedValue, description, dtcgType, inherited: false }
-                  : { value: processedValue, dtcgType, inherited: false };
+                currentObj[part] = buildJsValueEntry(processedValue, description, dtcgType, usedCodeSyntax, false);
               }
             }
             else {
@@ -220,9 +273,10 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
 
 /**
  * Exports all local variable collections to JavaScript format
+ * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
  * @returns JavaScript string with exported variable objects
  */
-export const exportToJS = async (): Promise<string | undefined> => {
+export const exportToJS = async (useCodeSyntaxName: boolean = false): Promise<string | undefined> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   try {
     const exports: string[] = [];
@@ -231,10 +285,10 @@ export const exportToJS = async (): Promise<string | undefined> => {
     const extendedCollections = collections.filter((collection) => collection.isExtension) as unknown as ExtendedVariableCollection[];
 
     for (const collection of baseCollections) {
-      exports.push(await processCollection(collection));
+      exports.push(await processCollection(collection, useCodeSyntaxName));
     }
     for (const extCollection of extendedCollections) {
-      exports.push(await processExtendedCollection(extCollection));
+      exports.push(await processExtendedCollection(extCollection, useCodeSyntaxName));
     }
 
     return exports.join('\n');

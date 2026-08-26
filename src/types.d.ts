@@ -130,7 +130,8 @@ export enum ImportMode {
 /**
  * Summary of an import run: counts of what was created/reused/updated/deleted,
  * plus any non-fatal warnings (unresolved aliases, `_unlinked` entries,
- * mode-limit errors, type mismatches) collected along the way.
+ * mode-limit errors, type mismatches, code-syntax write failures) collected
+ * along the way.
  */
 export interface ImportSummary {
   collectionsCreated: number;
@@ -143,6 +144,7 @@ export interface ImportSummary {
   variablesDeleted: number;
   valuesSet: number;
   aliasesResolved: number;
+  codeSyntaxSet: number;
   warnings: string[];
 }
 
@@ -168,10 +170,22 @@ export interface ImportDiffValue {
 }
 
 /**
+ * Before/after Figma "Code Syntax" override for one platform of one variable,
+ * computed by a dry-run preview. Only platforms the imported file actually
+ * carries are listed — an import never clears a platform it says nothing about.
+ */
+export interface ImportDiffCodeSyntax {
+  platform: CodeSyntaxPlatform;
+  before?: string;
+  after: string;
+  changed: boolean;
+}
+
+/**
  * Itemized create/update/delete decision for a single variable, plus its
  * per-mode value diffs. "unchanged" means the variable matched by name but
- * nothing about it (description, scopes, or any mode's value) actually
- * differs from the file — no write happens for it.
+ * nothing about it (description, scopes, code syntax, or any mode's value)
+ * actually differs from the file — no write happens for it.
  */
 export interface ImportDiffVariable {
   collectionName: string;
@@ -179,6 +193,7 @@ export interface ImportDiffVariable {
   action: "create" | "update" | "delete" | "unchanged";
   resolvedType: VariableResolvedDataType;
   values: ImportDiffValue[];
+  codeSyntax?: ImportDiffCodeSyntax[];
 }
 
 /**
@@ -201,6 +216,9 @@ export interface PluginMessage {
   format?: OutputFormats;
   useLinkedVarRowAndColPos?: boolean;
   useTailwindFormat?: boolean;
+  useSingleDashSeparator?: boolean;
+  useCodeSyntaxName?: boolean;
+  appendPxToUnscoped?: boolean;
   useLegacyFormat?: boolean;
   count?: number;
   filename?: string;

@@ -1,5 +1,5 @@
 import { rgbToCssColor } from "./color";
-import { getMatchingModeName } from "./variableUtils";
+import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
 import { resolveScopedType, isDimensionScope } from "./scopeToDTCG";
 import { toFileSlug } from "./stringTransformation";
 import type { ExportFile } from "../types.d";
@@ -36,6 +36,15 @@ function formatLeafValue(
 
 /**
  * Resolves a VARIABLE_ALIAS value into a "$.Collection.mode.path" reference string
+ *
+ * The target variable's "/" group separators are flattened to ".", which is
+ * lossy: a name segment containing a literal "." becomes indistinguishable
+ * from a group boundary. Import compensates by trying every reading of the
+ * flattened tail against the collection's real variables (see
+ * `pathVariants` / `resolveAliasCandidates` in importJSON.ts) rather than by
+ * escaping here, so the emitted format stays byte-compatible with every
+ * version of the exporter.
+ *
  * @param alias - The variable alias to resolve
  * @param modeName - The mode name in the referencing collection
  * @param currentCollectionName - The name of the collection containing the alias
@@ -82,19 +91,20 @@ async function processCollection({
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
+        const { name: varName, resolvedType, valuesByMode, scopes, description, codeSyntax }: Variable = figVar;
         const value: VariableValue = valuesByMode[mode.modeId];
+        const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           let obj: any = file.variables;
 
-          name.split("/").forEach((groupName) => {
+          varName.split("/").forEach((groupName) => {
             obj[groupName] = obj[groupName] || {};
             obj = obj[groupName];
           });
           obj.$type = resolveScopedType(scopes, resolvedType);
           obj.$description = description || '';
-          obj.$extensions = { figma: { scopes, resolvedType } };
+          obj.$extensions = { figma: { scopes, resolvedType, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
           if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
             obj.$value = await resolveAliasValue(value, mode.name, name);
@@ -131,7 +141,8 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
     for (const variableId of variableIds) {
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
-        const { name: varName, resolvedType, scopes, description }: Variable = figVar;
+        const { name: varName, resolvedType, scopes, description, codeSyntax }: Variable = figVar;
+        const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
 
         if (validTypes.has(resolvedType)) {
           const overridesForVar = variableOverrides[variableId];
@@ -147,7 +158,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           });
           obj.$type = resolveScopedType(scopes, resolvedType);
           obj.$description = description || '';
-          obj.$extensions = { figma: { scopes, resolvedType, inherited: isInherited } };
+          obj.$extensions = { figma: { scopes, resolvedType, inherited: isInherited, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
           if (isInherited) {
             const parentCollName = parentCollection ? parentCollection.name : name;

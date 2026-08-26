@@ -6,6 +6,9 @@ interface UseExportDataProps {
     format: OutputFormats;
     useRowColumnPos?: boolean;
     useTailwindFormat?: boolean;
+    useSingleDashSeparator?: boolean;
+    useCodeSyntaxName?: boolean;
+    appendPxToUnscoped?: boolean;
     useLegacyFormat?: boolean;
 }
 
@@ -18,6 +21,12 @@ interface UseExportDataReturn {
     setUseRowColumnPos: (useRowColumnPos: boolean) => void;
     useTailwindFormat: boolean;
     setUseTailwindFormat: (useTailwindFormat: boolean) => void;
+    useSingleDashSeparator: boolean;
+    setUseSingleDashSeparator: (useSingleDashSeparator: boolean) => void;
+    useCodeSyntaxName: boolean;
+    setUseCodeSyntaxName: (useCodeSyntaxName: boolean) => void;
+    appendPxToUnscoped: boolean;
+    setAppendPxToUnscoped: (appendPxToUnscoped: boolean) => void;
     useLegacyFormat: boolean;
     setUseLegacyFormat: (useLegacyFormat: boolean) => void;
     exportedData: string;
@@ -40,12 +49,24 @@ export const useExportData = ({
     format,
     useRowColumnPos: initialUseRowColumnPos = false,
     useTailwindFormat: initialUseTailwindFormat = false,
+    useSingleDashSeparator: initialUseSingleDashSeparator = true,
+    useCodeSyntaxName: initialUseCodeSyntaxName = false,
+    appendPxToUnscoped: initialAppendPxToUnscoped = false,
     useLegacyFormat: initialUseLegacyFormat = false
 }: UseExportDataProps): UseExportDataReturn => {
     const [filename, setFilename] = useState<string>("exported_variables");
     const [seeOutput, setSeeOutput] = useState<boolean>(true);
     const [useRowColumnPos, setUseRowColumnPos] = useState<boolean>(initialUseRowColumnPos);
     const [useTailwindFormat, setUseTailwindFormat] = useState<boolean>(initialUseTailwindFormat);
+    // Single-dash group separator only applies to the Tailwind CSS output, where a
+    // `--` between groups stops Tailwind IntelliSense from suggesting the variable.
+    const [useSingleDashSeparator, setUseSingleDashSeparator] = useState<boolean>(initialUseSingleDashSeparator);
+    // The Web code syntax can only stand in for a variable name in the formats
+    // that emit one, so it's ignored (and never sent) for JSON/CSV.
+    const [useCodeSyntaxName, setUseCodeSyntaxName] = useState<boolean>(initialUseCodeSyntaxName);
+    // Only the CSS/Tailwind output gives a bare number a unit, so the "px on
+    // undecided scopes" opt-in is ignored (and never sent) for the other formats.
+    const [appendPxToUnscoped, setAppendPxToUnscoped] = useState<boolean>(initialAppendPxToUnscoped);
     const [useLegacyFormat, setUseLegacyFormat] = useState<boolean>(initialUseLegacyFormat);
     const [exportedData, setExportedData] = useState<string>("");
     const [exportedFiles, setExportedFiles] = useState<ExportFile[] | null>(null);
@@ -56,6 +77,9 @@ export const useExportData = ({
         || format === OutputFormats.CSV
         || format === OutputFormats.JS;
 
+    const supportsCodeSyntaxName = format === OutputFormats.CSS
+        || format === OutputFormats.JS;
+
     const handleExport = () => {
         parent.postMessage({
             pluginMessage: {
@@ -63,6 +87,9 @@ export const useExportData = ({
                 format,
                 useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
                 useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
+                useSingleDashSeparator: format === OutputFormats.CSS && useTailwindFormat ? useSingleDashSeparator : false,
+                useCodeSyntaxName: supportsCodeSyntaxName ? useCodeSyntaxName : false,
+                appendPxToUnscoped: format === OutputFormats.CSS ? appendPxToUnscoped : false,
                 useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
             }
         }, "*");
@@ -142,7 +169,7 @@ export const useExportData = ({
         };
     }, [filename, format, seeOutput]);
 
-    // Re-export when Tailwind format changes (for CSS format only)
+    // Re-export when Tailwind format or the group separator changes (for CSS format only)
     useEffect(() => {
         if (format === OutputFormats.CSS && exportedData) {
             // Trigger re-export when Tailwind format toggle changes
@@ -151,11 +178,32 @@ export const useExportData = ({
                     type: "EXPORT.SUCCESS" as any, 
                     format, 
                     useLinkedVarRowAndColPos: false,
-                    useTailwindFormat: useTailwindFormat
+                    useTailwindFormat: useTailwindFormat,
+                    useSingleDashSeparator: useTailwindFormat ? useSingleDashSeparator : false,
+                    useCodeSyntaxName,
+                    appendPxToUnscoped
                 } 
             }, "*");
         }
-    }, [useTailwindFormat, format]);
+    }, [useTailwindFormat, useSingleDashSeparator, appendPxToUnscoped, format]);
+
+    // Re-export when the code-syntax naming toggle changes (CSS and JS formats only)
+    useEffect(() => {
+        if (supportsCodeSyntaxName && exportedData) {
+            parent.postMessage({
+                pluginMessage: {
+                    type: "EXPORT.SUCCESS" as any,
+                    format,
+                    useLinkedVarRowAndColPos: false,
+                    useTailwindFormat: format === OutputFormats.CSS ? useTailwindFormat : false,
+                    useSingleDashSeparator: format === OutputFormats.CSS && useTailwindFormat ? useSingleDashSeparator : false,
+                    useCodeSyntaxName,
+                    appendPxToUnscoped: format === OutputFormats.CSS ? appendPxToUnscoped : false,
+                    useLegacyFormat: supportsLegacyFormat ? useLegacyFormat : false
+                }
+            }, "*");
+        }
+    }, [useCodeSyntaxName, format]);
 
     // Re-export when row/column position changes (for CSV format only)
     useEffect(() => {
@@ -183,6 +231,7 @@ export const useExportData = ({
                     format,
                     useLinkedVarRowAndColPos: format === OutputFormats.CSV ? useRowColumnPos : false,
                     useTailwindFormat: false,
+                    useCodeSyntaxName: supportsCodeSyntaxName ? useCodeSyntaxName : false,
                     useLegacyFormat
                 }
             }, "*");
@@ -205,6 +254,12 @@ export const useExportData = ({
         setUseRowColumnPos,
         useTailwindFormat,
         setUseTailwindFormat,
+        useSingleDashSeparator,
+        setUseSingleDashSeparator,
+        useCodeSyntaxName,
+        setUseCodeSyntaxName,
+        appendPxToUnscoped,
+        setAppendPxToUnscoped,
         useLegacyFormat,
         setUseLegacyFormat,
         exportedData,

@@ -1,8 +1,9 @@
 const LEGACY_HEADER = "Collection,Mode,Variable,Type,Value,Scopes,Description";
 
-// Columns kept from the current 9-column row (Collection,Mode,Variable,Type,
-// DTCG Type,Value,Scopes,Inherited,Description): drops "DTCG Type" (4) and
-// "Inherited" (7), which didn't exist pre-`12930fe`.
+// Columns kept from the current 12-column row (Collection,Mode,Variable,Type,
+// DTCG Type,Value,Scopes,Inherited,Description,Code Syntax (Web),Code Syntax
+// (Android),Code Syntax (iOS)): drops "DTCG Type" (4), "Inherited" (7) and the
+// three trailing "Code Syntax" columns (9-11), none of which existed in v2.x.
 const KEEP_INDICES = [0, 1, 2, 3, 5, 6, 8];
 
 /**
@@ -53,7 +54,7 @@ function splitCsvRow(row: string): string[] {
 
 /**
  * Converts the current exporter's CSV output into the pre-`12930fe` (v2.x)
- * shape: drops the "DTCG Type" and "Inherited" columns, leaving
+ * shape: drops the "DTCG Type", "Inherited" and "Code Syntax" columns, leaving
  * `Collection,Mode,Variable,Type,Value,Scopes,Description`. Rows produced
  * from Enterprise extended collections (which v2.x never had) are kept, just
  * without the "Inherited" column — their inherited values already read as

@@ -12,7 +12,7 @@ export default {
         { "command": "export-json", "name": "JSON" },
         { "command": "export-js", "name": "JavaScript" },
         { "command": "export-csv", "name": "CSV" },
-        { "command": "export-css", "name": "CSS" }
+        { "command": "export-css", "name": "CSS & Tailwind" }
       ]
     },
     {"separator": true},

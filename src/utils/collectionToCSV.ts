@@ -1,8 +1,27 @@
 import { rgbToCssColor } from "./color";
-import { getMatchingModeName } from "./variableUtils";
+import { getMatchingModeName, CODE_SYNTAX_PLATFORMS } from "./variableUtils";
+import type { CodeSyntaxMap } from "./variableUtils";
 import { resolveScopedType } from "./scopeToDTCG";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
+
+/**
+ * Renders a variable's code syntax overrides as the trailing
+ * `Code Syntax (Web),Code Syntax (Android),Code Syntax (iOS)` cells. Values are
+ * quoted (and inner quotes doubled) like the description cell, since a code
+ * syntax may contain commas.
+ * @param codeSyntax - The raw `variable.codeSyntax` object
+ */
+function formatCodeSyntaxCells(codeSyntax: CodeSyntaxMap | undefined): string {
+  return CODE_SYNTAX_PLATFORMS
+    .map((platform) => {
+      const value = codeSyntax ? codeSyntax[platform] : undefined;
+      return typeof value === "string" && value !== ""
+        ? `"${value.replace(/"/g, '""')}"`
+        : "";
+    })
+    .join(",");
+}
 
 /**
  * Represents the position and metadata of a variable in CSV format
@@ -85,7 +104,7 @@ const processCollectionToCSV = async (
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
 
       if (figVar !== null) {
-        const { id, name:varName, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
+        const { id, name:varName, resolvedType, valuesByMode, scopes, description, codeSyntax }: Variable = figVar;
         const varValue: VariableValue = valuesByMode[mode.modeId];
         const varDescription = `"${description.replace(/"/g, '""')}"` || '';
 
@@ -116,7 +135,7 @@ const processCollectionToCSV = async (
           }
           const scopesStr = `"${scopes.toString()}"`
           const dtcgType = resolveScopedType(scopes, resolvedType);
-          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${dtcgType},${value},${scopesStr},false,${varDescription}`);
+          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${dtcgType},${value},${scopesStr},false,${varDescription},${formatCodeSyntaxCells(codeSyntax)}`);
         }
       }
     }
@@ -150,7 +169,7 @@ const processExtendedCollectionToCSV = async (
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
 
       if (figVar !== null) {
-        const { name: varName, resolvedType, scopes, description }: Variable = figVar;
+        const { name: varName, resolvedType, scopes, description, codeSyntax }: Variable = figVar;
 
         if (validTypes.has(resolvedType)) {
           const varDescription = `"${description.replace(/"/g, '""')}"` || '';
@@ -176,7 +195,7 @@ const processExtendedCollectionToCSV = async (
 
           const scopesStr = `"${scopes.toString()}"`
           const dtcgType = resolveScopedType(scopes, resolvedType);
-          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${dtcgType},${value},${scopesStr},${isInherited},${varDescription}`);
+          csvRows.push(`${name},${mode.name},${varName},${resolvedType},${dtcgType},${value},${scopesStr},${isInherited},${varDescription},${formatCodeSyntaxCells(codeSyntax)}`);
         }
       }
     }
@@ -191,7 +210,7 @@ const processExtendedCollectionToCSV = async (
  * @returns CSV string with all variables
  */
 export const exportToCSV = async (useLinkedVarRowAndColPos: boolean = false): Promise<string | undefined> => {
-  const csvData = ["Collection,Mode,Variable,Type,DTCG Type,Value,Scopes,Inherited,Description"];
+  const csvData = ["Collection,Mode,Variable,Type,DTCG Type,Value,Scopes,Inherited,Description,Code Syntax (Web),Code Syntax (Android),Code Syntax (iOS)"];
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   let collectionsVariablesMap = new Map<string, VariablePosition>();
 
