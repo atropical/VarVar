@@ -34,7 +34,7 @@ const SCOPE_TO_DTCG: Partial<Record<VariableScope, { type: string; dimension: bo
  * `fontWeight` token may not carry, and they are emitted as `string` instead,
  * unchanged.
  */
-const DTCG_FONT_WEIGHT_KEYWORDS = new Set([
+export const DTCG_FONT_WEIGHT_KEYWORDS: ReadonlySet<string> = new Set([
   "thin",
   "hairline",
   "extra-light",
@@ -86,7 +86,7 @@ const TYPE_TO_RESOLVED_TYPES: Record<string, VariableResolvedDataType[]> = {
  * matches its shape instead of being clamped or rewritten.
  * @param value - The variable's raw value for this mode
  */
-function isConformantFontWeight(value: VariableValue): boolean {
+export function isConformantFontWeight(value: VariableValue): boolean {
   if (typeof value === "number") {
     return Number.isFinite(value) && value >= 1 && value <= 1000;
   }
