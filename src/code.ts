@@ -58,6 +58,11 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
         // is a bare number there, so the unit has to be left off at the source on
         // that path (toLegacyJSON also unwraps a unit-carrying value defensively).
         const dtcgExportUnit: ExportUnit = useLegacyFormat ? "none" : exportUnit;
+        // Same reasoning for the DTCG value shapes: v2.x wrote every colour as a
+        // CSS colour string and had no object `$value` at all, so the legacy path
+        // is always built from the string forms. The UI hides the toggle when
+        // legacy is on, but it still sends whatever the user last chose.
+        const dtcgValueShapes = useLegacyFormat ? false : dtcgCompliantValues;
         // exportToTailwind doesn't have hierarchy-aware handling yet, so the
         // flag stays false on that path even if extended collections exist.
         // Legacy format (JSON/CSV) flattens extended collections into one file,
@@ -74,7 +79,7 @@ async function handleExport(format: OutputFormats, useLinkedVarRowAndColPos: boo
                 break;
             }
             case OutputFormats.JSON: {
-                const jsonFiles = await exportToJSON(dtcgExportUnit, rootFontSize, appendPxToUnscoped, dtcgCompliantValues) || [];
+                const jsonFiles = await exportToJSON(dtcgExportUnit, rootFontSize, appendPxToUnscoped, dtcgValueShapes) || [];
                 const outputFiles = useLegacyFormat ? toLegacyJSON(jsonFiles) : jsonFiles;
                 if (outputFiles.length <= 1) {
                     data = outputFiles[0] ? outputFiles[0].content : '';

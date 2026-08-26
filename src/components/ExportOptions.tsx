@@ -37,6 +37,11 @@ interface ExportOptionsProps {
  * version of the specification. Do not reference this version as
  * authoritative in any way." Both currently agree on the dimension,
  * number and fontWeight shapes the exporter emits.
+ *
+ * The colour `$value` shape is defined in the companion Color Module, at
+ * https://www.designtokens.org/TR/2025.10/color/ — a Final Community Group
+ * Report which states it "is considered stable". The format module links to it
+ * for the `color` type, so the one link above reaches both.
  */
 const DTCG_SPEC_URL = "https://www.designtokens.org/TR/2025.10/format/";
 
@@ -293,7 +298,7 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                 </>
             )}
 
-            {/* JSON-only: the shape a unit-carrying value is written in. */}
+            {/* JSON-only: the shape the spec's object-valued types are written in. */}
             {format === OutputFormats.JSON && !useLegacyFormat && onDtcgCompliantValuesChange && (
                 <>
                     <Flex gap="2">
@@ -309,8 +314,10 @@ export const ExportOptions: React.FC<ExportOptionsProps> = ({
                     </Flex>
                     <Footnote>
                         The <ExternalLink href={DTCG_SPEC_URL}>Design Tokens spec</ExternalLink> writes a dimension
-                        as <code>{'{ "value": 16, "unit": "px" }'}</code>. Turn this off for the “16px” string
-                        earlier versions emitted. Values without a unit are bare numbers either way.
+                        as <code>{'{ "value": 16, "unit": "px" }'}</code> and a colour
+                        as <code>{'{ "colorSpace": "srgb", "components": [1, 0, 1] }'}</code>. Turn this off for the
+                        “16px” and “#ff00ff” strings earlier versions emitted. Numbers without a unit are bare
+                        numbers either way, and CSS, Tailwind, JS and CSV always keep CSS colours.
                     </Footnote>
                 </>
             )}

@@ -1,19 +1,21 @@
-import { rgbToCssColor } from "./color";
+import { rgbToCssColor, toDtcgColorValue } from "./color";
 import { cleanFloat32 } from "./numberFormat";
 import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
 import { resolveEmittedType, shouldUnitizeNumericValue } from "./scopeToDTCG";
 import { DEFAULT_UNIT_OPTIONS, formatDtcgNumericValue, toUnitOptions } from "./units";
 import type { DtcgDimensionValue, UnitOptions } from "./units";
+import type { DtcgColorValue } from "./colorSpaces";
 import { toFileSlug } from "./stringTransformation";
 import type { ExportFile, ExportUnit } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
 
 /**
- * How a JSON export shapes its numeric values: the unit dimension-scoped values
- * get, whether default-scoped values count as dimensions too, and whether a
- * unit-carrying value is written as the DTCG `{value, unit}` object or as the
- * `"16px"` string earlier versions emitted.
+ * How a JSON export shapes its values: the unit dimension-scoped numbers get,
+ * whether default-scoped numbers count as dimensions too, and whether values
+ * that DTCG spells as objects — a dimension's `{value, unit}`, a colour's
+ * `{colorSpace, components}` — are written that way or in the older string
+ * spellings (`"16px"`, `"#ff00ff"`) earlier versions emitted.
  */
 export interface JsonValueOptions {
   unitOptions: UnitOptions;
@@ -52,13 +54,15 @@ function formatLeafValue(
   resolvedType: VariableResolvedDataType,
   scopes: VariableScope[],
   options: JsonValueOptions
-): string | number | boolean | DtcgDimensionValue {
+): string | number | boolean | DtcgDimensionValue | DtcgColorValue {
   const isColor = resolvedType === "COLOR";
   const isNumber = resolvedType === "FLOAT";
   const isBool = resolvedType === "BOOLEAN";
 
   return isColor
-    ? rgbToCssColor(value as RGBA)
+    ? options.dtcgCompliantValues
+      ? toDtcgColorValue(value as RGBA)
+      : rgbToCssColor(value as RGBA)
     : isNumber
       ? isUnitizedValue(resolvedType, scopes, options)
         ? formatDtcgNumericValue(Number(value), options.unitOptions, options.dtcgCompliantValues)
@@ -231,8 +235,9 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
  * @param rootFontSize - What a `rem` conversion divides by
  * @param appendPxToUnscoped - Also give the unit to values whose scoping is undecided
  *        (no scopes, or ALL_SCOPES). Off by default.
- * @param dtcgCompliantValues - Emit dimensions as the spec's `{ "value": 16, "unit":
- *        "px" }` object rather than the `"16px"` string earlier versions emitted.
+ * @param dtcgCompliantValues - Emit the spec's object shapes rather than the string
+ *        forms earlier versions emitted: `{ "value": 16, "unit": "px" }` for a
+ *        dimension, and `{ "colorSpace": "srgb", "components": [...] }` for a colour.
  *        On by default; turning it off is an escape hatch for existing consumers.
  * @returns Array of exported files
  */

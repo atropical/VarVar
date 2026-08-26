@@ -1,4 +1,5 @@
-import { cssColorToRgba, rgbToCssColor } from "./color";
+import { parseTokenColor, rgbToCssColor } from "./color";
+import { colorConversionNote } from "./colorSpaces";
 import { cleanFloat32 } from "./numberFormat";
 import { DEFAULT_ROOT_FONT_SIZE, isFontRelativeUnit, normalizeRootFontSize, parseUnitValue } from "./units";
 import { DTCG_FONT_WEIGHT_KEYWORDS } from "./scopeToDTCG";
@@ -522,22 +523,38 @@ function parseImportedNumber(
 
 /**
  * Renders a raw `$value` for a warning message. Objects (the DTCG
- * `{ value, unit }` dimension shape) go through JSON.stringify so the message
- * says what was actually in the file rather than "[object Object]".
+ * `{ value, unit }` dimension and `{ colorSpace, components }` colour shapes)
+ * go through JSON.stringify so the message says what was actually in the file
+ * rather than "[object Object]".
  */
 function describeRawValue(raw: unknown): string {
   return typeof raw === "object" && raw !== null ? JSON.stringify(raw) : String(raw);
 }
 
+/**
+ * Turns one token file's `$value` into the value Figma stores for it.
+ *
+ * @param rawValue - The raw `$value`, in whichever shape the file spells it
+ * @param resolvedType - The Figma type the variable is being imported as
+ * @param rootFontSize - Already-normalized root font size for `rem`/`em`
+ * @param onLossyUnit - Called with the unit name when a unit is dropped lossily
+ * @param onColorNote - Called when a colour had to be converted out of a colour
+ *   space Figma variables cannot store (see {@link colorConversionNote})
+ */
 function parseLiteralValue(
   rawValue: unknown,
   resolvedType: VariableResolvedDataType,
   rootFontSize: number,
-  onLossyUnit: (unit: string) => void
+  onLossyUnit: (unit: string) => void,
+  onColorNote: (note: string) => void
 ): VariableValue {
   switch (resolvedType) {
-    case "COLOR":
-      return cssColorToRgba(String(rawValue));
+    case "COLOR": {
+      const parsed = parseTokenColor(rawValue);
+      const note = colorConversionNote(parsed);
+      if (note) onColorNote(note);
+      return parsed.rgba;
+    }
     case "FLOAT":
       return parseImportedNumber(rawValue, rootFontSize, onLossyUnit);
     case "BOOLEAN":
@@ -568,22 +585,41 @@ async function formatStoredValue(value: VariableValue | undefined, type: Variabl
 
 /**
  * Whether an existing stored value already equals the literal value about to
- * be imported. `after` always came from parsing an exported file, so for
- * COLOR it can never be more precise than the export format's own
- * quantization (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for
- * alpha) — comparing at full float precision against a native Figma color
- * (which isn't necessarily on that grid) would report a "change" on every
- * re-import of a file exported by this same plugin. Both sides are rounded
- * to that grid before comparing, so only a color that's actually different
- * once round-tripped through the export format counts as changed.
+ * be imported.
+ *
+ * COLOR needs a tolerance, and which tolerance depends on how the file spelled
+ * the colour:
+ *
+ * - A CSS colour string carries the export format's own quantization
+ *   (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for alpha), so an
+ *   imported value can never be more precise than that. Comparing at full float
+ *   precision against a native Figma colour (which isn't on that grid) would
+ *   report a "change" on every re-import of a file this plugin wrote, so both
+ *   sides are rounded to the 8-bit grid first.
+ * - The DTCG object form carries the full channel values, so it is compared on
+ *   the float32 grid Figma actually stores colours on instead — precise enough
+ *   that a real sub-1/255 change is seen, and still stable across re-imports
+ *   (the exported decimal and the stored channel are the same float32 even when
+ *   they are different doubles, which is the whole point of `cleanFloat32`).
+ *
+ * @param before - The variable's current value for this mode
+ * @param after - The value parsed out of the file
+ * @param type - The variable's resolved type
+ * @param quantized - True when the file spelled this value in a form that has
+ *   already lost precision — i.e. a CSS colour string
  */
-function literalValueEquals(before: VariableValue | undefined, after: VariableValue, type: VariableResolvedDataType): boolean {
+function literalValueEquals(
+  before: VariableValue | undefined,
+  after: VariableValue,
+  type: VariableResolvedDataType,
+  quantized: boolean
+): boolean {
   if (before === undefined || isAliasStoredValue(before)) return false;
   if (type === "COLOR") {
     const a = before as RGBA;
     const b = after as RGBA;
-    const ch = (n: number) => Math.round(n * 255);
-    const alpha = (n: number) => Math.round(n * 100);
+    const ch = quantized ? (n: number) => Math.round(n * 255) : Math.fround;
+    const alpha = quantized ? (n: number) => Math.round(n * 100) : Math.fround;
     return ch(a.r) === ch(b.r) && ch(a.g) === ch(b.g) && ch(a.b) === ch(b.b) && alpha(a.a) === alpha(b.a);
   }
   return before === after;
@@ -955,11 +991,21 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
   ): Promise<void> => {
     let newValue: VariableValue;
     try {
-      newValue = parseLiteralValue(record.rawValue, record.resolvedType, rootSize, (unit) => {
-        summary.warnings.push(
-          `Value "${describeRawValue(record.rawValue)}" for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}) uses "${unit}", which has no Figma equivalent — the unit was dropped and the number imported as-is.`
-        );
-      });
+      newValue = parseLiteralValue(
+        record.rawValue,
+        record.resolvedType,
+        rootSize,
+        (unit) => {
+          summary.warnings.push(
+            `Value "${describeRawValue(record.rawValue)}" for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}) uses "${unit}", which has no Figma equivalent — the unit was dropped and the number imported as-is.`
+          );
+        },
+        (note) => {
+          summary.warnings.push(
+            `"${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${note}`
+          );
+        }
+      );
     } catch (err) {
       // A value the parsers can't read at all (a colour spelling they don't
       // know, say) costs that one mode, not the whole import.
@@ -974,7 +1020,12 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
     const after = formatLiteral(newValue, record.resolvedType);
 
-    const changed = !literalValueEquals(beforeRaw, newValue, record.resolvedType);
+    const changed = !literalValueEquals(
+      beforeRaw,
+      newValue,
+      record.resolvedType,
+      typeof record.rawValue === "string"
+    );
     diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
 
     // Skip the write entirely when the stored value already matches — a
