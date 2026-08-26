@@ -190,6 +190,21 @@ export const ImportDiffPreview: React.FC<ImportDiffPreviewProps> = ({
                                             ))}
                                         </Flex>
                                     )}
+                                    {v.codeSyntax && v.codeSyntax.length > 0 && (
+                                        <Flex direction="column" gap="1" style={{ marginLeft: 8 }}>
+                                            {v.codeSyntax.map((cs, j) => (
+                                                <Text
+                                                    key={j}
+                                                    style={{
+                                                        color: cs.changed ? undefined : "var(--figma-color-text-secondary)",
+                                                        fontSize: 11,
+                                                    }}
+                                                >
+                                                    code syntax ({cs.platform}): {cs.before !== undefined ? `${cs.before} → ` : ""}{cs.after}
+                                                </Text>
+                                            ))}
+                                        </Flex>
+                                    )}
                                 </Flex>
                             ))}
                         </Flex>

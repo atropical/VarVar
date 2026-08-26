@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
+import { TooltipProvider } from "figma-kit";
 import "figma-kit/styles.css";
 import "./styles/highlightCode.css";
 import { PluginCommands, MessageTypes, PluginMessage } from "./types.d";
@@ -54,6 +55,9 @@ const App: React.FC = () => {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    {/* Single Radix tooltip provider for the whole UI — every Tooltip needs one above it */}
+    <TooltipProvider delayDuration={300}>
+      <App />
+    </TooltipProvider>
   </React.StrictMode>,
 );

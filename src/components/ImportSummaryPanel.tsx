@@ -43,6 +43,11 @@ export const ImportSummaryPanel: React.FC<ImportSummaryPanelProps> = ({ summary,
                 <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
                     Values set: {summary.valuesSet} ({summary.aliasesResolved} linked variables)
                 </Text>
+                {summary.codeSyntaxSet > 0 && (
+                    <Text style={{ color: 'var(--figma-color-text-secondary)' }}>
+                        Code syntax set: {summary.codeSyntaxSet}
+                    </Text>
+                )}
             </Flex>
 
             {summary.warnings.length > 0 && (

@@ -28,6 +28,12 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         setUseRowColumnPos,
         useTailwindFormat,
         setUseTailwindFormat,
+        useSingleDashSeparator,
+        setUseSingleDashSeparator,
+        useCodeSyntaxName,
+        setUseCodeSyntaxName,
+        appendPxToUnscoped,
+        setAppendPxToUnscoped,
         useLegacyFormat,
         setUseLegacyFormat,
         exportedData,
@@ -59,6 +65,22 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         }
     }, [format]);
 
+    // Reset useCodeSyntaxName when format changes to one that doesn't emit a
+    // variable name of its own (JSON/CSV)
+    useEffect(() => {
+        if (format !== OutputFormats.CSS && format !== OutputFormats.JS) {
+            setUseCodeSyntaxName(false);
+        }
+    }, [format]);
+
+    // Reset appendPxToUnscoped when format changes to one that never emits a
+    // unit on a numeric value (only the CSS/Tailwind output does)
+    useEffect(() => {
+        if (format !== OutputFormats.CSS) {
+            setAppendPxToUnscoped(false);
+        }
+    }, [format]);
+
     // Clear exported data when format changes to refresh preview
     useEffect(() => {
         setExportedData("");
@@ -87,7 +109,7 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                     </RadioGroup.Label>
                     <RadioGroup.Label>
                         <RadioGroup.Item value={OutputFormats.CSS} />
-                        CSS
+                        CSS &amp; Tailwind
                     </RadioGroup.Label>
                 </RadioGroup.Root>
             </Flex>
@@ -97,10 +119,16 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                 seeOutput={seeOutput}
                 useRowColumnPos={useRowColumnPos}
                 useTailwindFormat={useTailwindFormat}
+                useSingleDashSeparator={useSingleDashSeparator}
+                useCodeSyntaxName={useCodeSyntaxName}
+                appendPxToUnscoped={appendPxToUnscoped}
                 useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={setUseRowColumnPos}
                 onUseTailwindFormatChange={setUseTailwindFormat}
+                onUseSingleDashSeparatorChange={setUseSingleDashSeparator}
+                onUseCodeSyntaxNameChange={setUseCodeSyntaxName}
+                onAppendPxToUnscopedChange={setAppendPxToUnscoped}
                 onUseLegacyFormatChange={setUseLegacyFormat}
             />
 

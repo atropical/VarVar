@@ -1,15 +1,117 @@
 import { rgbToCssColor } from "./color";
-import { toCssVar } from "./stringTransformation";
+import {
+    toCssVar,
+    toCodeSyntaxCssVar,
+    DEFAULT_GROUP_SEPARATOR,
+    SINGLE_GROUP_SEPARATOR,
+    recordEmittedVarName,
+    recordRejectedCodeSyntax,
+    buildCollisionComment,
+    buildCodeSyntaxComment
+} from "./stringTransformation";
+import type { NameOptions } from "./stringTransformation";
+import { isDimensionScope, isUnscoped } from "./scopeToDTCG";
+
+/**
+ * Maps a Figma variable scope to its Tailwind v4 theme namespace token.
+ * An empty string means "decided, but no namespace" (a plain `--` variable);
+ * an absent entry means the scope carries no naming information at all.
+ */
+const SCOPE_TO_TAILWIND_NAMESPACE: Partial<Record<VariableScope, string>> = {
+    FONT_SIZE: "text",
+    FONT_WEIGHT: "font-weight",
+    FONT_FAMILY: "font",
+    LETTER_SPACING: "tracking",
+    LINE_HEIGHT: "leading",
+    CORNER_RADIUS: "radius",
+    GAP: "spacing",
+    WIDTH_HEIGHT: "spacing",
+    PARAGRAPH_SPACING: "spacing",
+    PARAGRAPH_INDENT: "spacing",
+    STROKE_FLOAT: "spacing",
+    EFFECT_FLOAT: "spacing",
+    ALL_FILLS: "color",
+    FRAME_FILL: "color",
+    SHAPE_FILL: "color",
+    TEXT_FILL: "color",
+    STROKE_COLOR: "color",
+    EFFECT_COLOR: "color",
+    OPACITY: "opacity",
+    FONT_STYLE: "",
+    TEXT_CONTENT: "",
+};
+
+/**
+ * Resolves a Figma variable's scopes to a Tailwind v4 theme namespace token.
+ * ALL_SCOPES, empty scopes, unmapped scopes and scopes that disagree on a
+ * namespace are all treated as undecided.
+ * @param scopes - The variable's scopes
+ * @returns The namespace token ("" for no namespace), or undefined when undecided
+ */
+function resolveTailwindNamespace(scopes: VariableScope[]): string | undefined {
+    if (!scopes || scopes.length === 0 || scopes.includes("ALL_SCOPES")) {
+        return undefined;
+    }
+
+    const mapped = scopes
+        .map((scope) => SCOPE_TO_TAILWIND_NAMESPACE[scope])
+        .filter((namespace): namespace is string => namespace !== undefined);
+
+    if (mapped.length === 0) {
+        return undefined;
+    }
+
+    // If every mapped scope agrees on a namespace, use it; otherwise stay undecided.
+    const [first, ...rest] = mapped;
+    const allAgree = rest.every((namespace) => namespace === first);
+    return allAgree ? first : undefined;
+}
+
+/**
+ * Strips a leading group segment that merely echoes the namespace it is about to
+ * be prefixed with, so `text/h1` scoped to font size becomes `--text-h1` rather
+ * than `--text-text--h1`.
+ * @param name - Original variable name
+ * @param namespace - The resolved Tailwind namespace token
+ * @param groupSeparator - What Figma's `/` group delimiter becomes in names
+ * @returns The name without its namespace-echoing group segment
+ */
+function stripEchoedNamespace(name: string, namespace: string, groupSeparator: string): string {
+    const segments = name.split("/");
+    if (segments.length < 2) {
+        return name;
+    }
+    if (toCssVar(segments[0].trim(), false, groupSeparator) === namespace) {
+        return segments.slice(1).join("/");
+    }
+    return name;
+}
 
 /**
  * Transforms variable names to Tailwind CSS v4+ conventions
  * @param name - Original variable name
  * @param resolvedType - Type of the variable
+ * @param scopes - The variable's scopes, which take precedence over name heuristics
+ * @param groupSeparator - What Figma's `/` group delimiter becomes in the emitted name
  * @returns Transformed name following Tailwind conventions
  */
-function transformToTailwindName(name: string, resolvedType: string): string {
+function transformToTailwindName(
+    name: string,
+    resolvedType: string,
+    scopes: VariableScope[] = [],
+    groupSeparator: string = DEFAULT_GROUP_SEPARATOR
+): string {
     const lowerName = name.toLowerCase();
-    
+
+    // Scopes are authoritative: a variable scoped to font-size is a `--text-*`,
+    // one scoped to font-weight is a `--font-weight-*`, and so on.
+    const scopedNamespace = resolveTailwindNamespace(scopes);
+    if (scopedNamespace !== undefined) {
+        return scopedNamespace === ""
+            ? `--${toCssVar(name, false, groupSeparator)}`
+            : `--${scopedNamespace}-${toCssVar(stripEchoedNamespace(name, scopedNamespace, groupSeparator), false, groupSeparator)}`;
+    }
+
     // Auto-detect color variables
     if (resolvedType === "COLOR" || 
         lowerName.includes('color') || 
@@ -20,7 +122,7 @@ function transformToTailwindName(name: string, resolvedType: string): string {
         lowerName.includes('foreground') ||
         lowerName.includes('border') ||
         lowerName.includes('text')) {
-        return `--color-${toCssVar(name)}`;
+        return `--color-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect spacing/size variables
@@ -29,7 +131,7 @@ function transformToTailwindName(name: string, resolvedType: string): string {
         lowerName.includes('padding') ||
         lowerName.includes('gap') ||
         lowerName.includes('space')) {
-        return `--spacing-${toCssVar(name)}`;
+        return `--spacing-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect size variables
@@ -38,7 +140,7 @@ function transformToTailwindName(name: string, resolvedType: string): string {
         lowerName.includes('height') ||
         lowerName.includes('radius') ||
         lowerName.includes('border')) {
-        return `--size-${toCssVar(name)}`;
+        return `--size-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect typography variables
@@ -48,17 +150,17 @@ function transformToTailwindName(name: string, resolvedType: string): string {
         lowerName.includes('letter') ||
         lowerName.includes('weight')) {
         if (lowerName.includes('family') || lowerName.includes('font')) {
-            return `--font-family-${toCssVar(name)}`;
+            return `--font-family-${toCssVar(name, false, groupSeparator)}`;
         } else if (lowerName.includes('size')) {
-            return `--font-size-${toCssVar(name)}`;
+            return `--font-size-${toCssVar(name, false, groupSeparator)}`;
         } else if (lowerName.includes('weight')) {
-            return `--font-weight-${toCssVar(name)}`;
+            return `--font-weight-${toCssVar(name, false, groupSeparator)}`;
         } else if (lowerName.includes('line')) {
-            return `--line-height-${toCssVar(name)}`;
+            return `--line-height-${toCssVar(name, false, groupSeparator)}`;
         } else if (lowerName.includes('letter')) {
-            return `--letter-spacing-${toCssVar(name)}`;
+            return `--letter-spacing-${toCssVar(name, false, groupSeparator)}`;
         }
-        return `--font-${toCssVar(name)}`;
+        return `--font-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect animation/transition variables
@@ -67,33 +169,60 @@ function transformToTailwindName(name: string, resolvedType: string): string {
         lowerName.includes('ease') ||
         lowerName.includes('transition') ||
         lowerName.includes('animation')) {
-        return `--duration-${toCssVar(name)}`;
+        return `--duration-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect shadow variables
     if (lowerName.includes('shadow') || lowerName.includes('drop')) {
-        return `--shadow-${toCssVar(name)}`;
+        return `--shadow-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Auto-detect opacity variables
     if (lowerName.includes('opacity') || lowerName.includes('alpha')) {
-        return `--opacity-${toCssVar(name)}`;
+        return `--opacity-${toCssVar(name, false, groupSeparator)}`;
     }
     
     // Keep original naming as fallback for unrecognized patterns
-    return `--${toCssVar(name)}`;
+    return `--${toCssVar(name, false, groupSeparator)}`;
+}
+
+/**
+ * Resolves the `--`-prefixed name a variable is emitted as in the @theme block.
+ * With the code-syntax option on, a usable `codeSyntax.WEB` wins over the
+ * namespaced Tailwind name; anything that couldn't be a CSS custom property
+ * name is recorded and falls back to the derived name.
+ * @param figVar - The Figma variable being named
+ * @param groupSeparator - What Figma's `/` group delimiter becomes in the name
+ * @param nameOptions - Per-run code-syntax option and rejection registry
+ */
+function resolveTailwindVarName(figVar: Variable, groupSeparator: string, nameOptions: NameOptions): string {
+    if (nameOptions.useCodeSyntaxName) {
+        const override = figVar.codeSyntax?.WEB;
+        const fromCodeSyntax = toCodeSyntaxCssVar(override);
+        if (fromCodeSyntax) {
+            return fromCodeSyntax;
+        }
+        if (typeof override === "string" && override.trim() !== "") {
+            recordRejectedCodeSyntax(nameOptions.rejectedCodeSyntax, figVar.name, override);
+        }
+    }
+    return transformToTailwindName(figVar.name, figVar.resolvedType, figVar.scopes, groupSeparator);
 }
 
 /**
  * Processes a variable collection into Tailwind CSS v4+ format
  * @param collection - The variable collection to process
+ * @param groupSeparator - What Figma's `/` group delimiter becomes in variable names
+ * @param nameRegistry - Collects emitted name -> source names, for collision reporting
+ * @param nameOptions - Per-run code-syntax option and rejection registry
+ * @param appendPxToUnscoped - Emit `px` for numbers whose scoping is undecided
  * @returns Object containing theme variables and custom variants
  */
 async function processCollection({
     name,
     modes,
     variableIds,
-}: VariableCollection): Promise<{ theme: string[], variants: string[] }> {
+}: VariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, appendPxToUnscoped: boolean): Promise<{ theme: string[], variants: string[] }> {
     const themeVars: string[] = [];
     const customVariants: string[] = [];
     const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -104,11 +233,12 @@ async function processCollection({
         for (const variableId of variableIds) {
             const figVar = await figma.variables.getVariableByIdAsync(variableId);
             if (figVar !== null) {
-                const { name, resolvedType, valuesByMode, description }: Variable = figVar;
+                const { name, resolvedType, valuesByMode, scopes, description }: Variable = figVar;
                 const value: VariableValue = valuesByMode[mode.modeId];
 
                 if (value !== undefined && validTypes.has(resolvedType)) {
-                    const tailwindVarName = transformToTailwindName(name, resolvedType);
+                    const tailwindVarName = resolveTailwindVarName(figVar, groupSeparator, nameOptions);
+                    recordEmittedVarName(nameRegistry, tailwindVarName, name);
                     let cssValue: string;
         
                     const isColor: boolean = resolvedType === "COLOR";
@@ -119,7 +249,7 @@ async function processCollection({
                         const linkedVar = await figma.variables.getVariableByIdAsync(value.id);
 
                         if(linkedVar) {
-                            const linkedName = transformToTailwindName(linkedVar.name, linkedVar.resolvedType);
+                            const linkedName = resolveTailwindVarName(linkedVar, groupSeparator, nameOptions);
                             cssValue = `var(${linkedName})`;
                         }
                         else {
@@ -130,7 +260,9 @@ async function processCollection({
                         cssValue = isColor 
                             ? rgbToCssColor(value as RGBA)
                             : isNumber
-                                ? `${parseFloat(value as string)}px`
+                                ? isDimensionScope(scopes) || (appendPxToUnscoped && isUnscoped(scopes))
+                                    ? `${parseFloat(value as string)}px`
+                                    : `${parseFloat(value as string)}`
                                 : isBool
                                     ? Boolean(value) ? '1' : '0'
                                     : `"${String(value)}"`;
@@ -161,16 +293,26 @@ async function processCollection({
 
 /**
  * Exports all local variable collections to Tailwind CSS v4+ format
+ * @param useSingleDashSeparator - Join Figma groups with a single dash instead of `--`.
+ *        Defaults to true: Tailwind IntelliSense only suggests theme variables whose
+ *        segments are joined by single dashes.
+ * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
+ * @param appendPxToUnscoped - Append `px` to FLOAT values whose scoping is undecided
+ *        (no scopes, or ALL_SCOPES). Scopes explicitly mapped to a non-dimension
+ *        type stay unitless regardless.
  * @returns Tailwind CSS string with @theme directive and @custom-variant directives
  */
-export const exportToTailwind = async (): Promise<string> => {
+export const exportToTailwind = async (useSingleDashSeparator: boolean = true, useCodeSyntaxName: boolean = false, appendPxToUnscoped: boolean = false): Promise<string> => {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const groupSeparator = useSingleDashSeparator ? SINGLE_GROUP_SEPARATOR : DEFAULT_GROUP_SEPARATOR;
     try {
         const themeVars = new Set<string>();  // Use Set to avoid duplicates
         const customVariants: string[] = [];
-        
+        const nameRegistry = new Map<string, Set<string>>();
+        const nameOptions: NameOptions = { useCodeSyntaxName, rejectedCodeSyntax: new Map<string, string>() };
+
         for(const collection of collections) {
-            const { theme, variants } = await processCollection(collection);
+            const { theme, variants } = await processCollection(collection, groupSeparator, nameRegistry, nameOptions, appendPxToUnscoped);
             theme.forEach(v => themeVars.add(v));
             customVariants.push(...variants);
         }
@@ -178,9 +320,17 @@ export const exportToTailwind = async (): Promise<string> => {
         // Create @theme block with all variables
         const themeBlock = `@theme {\n${Array.from(themeVars).join('\n')}\n}`;
 
+        const collisionComment = buildCollisionComment(nameRegistry);
+        const codeSyntaxComment = buildCodeSyntaxComment(nameOptions.rejectedCodeSyntax);
+
         // Combine theme and custom variants
-        const result = [themeBlock, ...customVariants].join('\n\n');
-        
+        const result = [
+            ...(codeSyntaxComment ? [codeSyntaxComment] : []),
+            ...(collisionComment ? [collisionComment] : []),
+            themeBlock,
+            ...customVariants
+        ].join('\n\n');
+
         return result;
     } catch (err) {
         console.error(err);

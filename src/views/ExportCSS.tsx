@@ -25,6 +25,12 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
         setSeeOutput,
         useTailwindFormat,
         setUseTailwindFormat,
+        useSingleDashSeparator,
+        setUseSingleDashSeparator,
+        useCodeSyntaxName,
+        setUseCodeSyntaxName,
+        appendPxToUnscoped,
+        setAppendPxToUnscoped,
         exportedData,
         usedExtendedCollections,
         variablesCount,
@@ -42,9 +48,15 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
                 seeOutput={seeOutput}
                 useRowColumnPos={false}
                 useTailwindFormat={useTailwindFormat}
+                useSingleDashSeparator={useSingleDashSeparator}
+                useCodeSyntaxName={useCodeSyntaxName}
+                appendPxToUnscoped={appendPxToUnscoped}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
                 onUseTailwindFormatChange={setUseTailwindFormat}
+                onUseSingleDashSeparatorChange={setUseSingleDashSeparator}
+                onUseCodeSyntaxNameChange={setUseCodeSyntaxName}
+                onAppendPxToUnscopedChange={setAppendPxToUnscoped}
             />
 
             <FilenameInput 
