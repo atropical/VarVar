@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { formatFloat32 } from "./numberFormat";
 import {
     toCssVar,
     toCodeSyntaxCssVar,
@@ -10,7 +11,10 @@ import {
     buildCodeSyntaxComment
 } from "./stringTransformation";
 import type { NameOptions } from "./stringTransformation";
-import { isDimensionScope, isUnscoped } from "./scopeToDTCG";
+import { shouldUnitizeNumericValue } from "./scopeToDTCG";
+import { DEFAULT_UNIT_OPTIONS, formatNumericValue, toUnitOptions } from "./units";
+import type { UnitOptions } from "./units";
+import type { ExportUnit } from "../types.d";
 
 /**
  * Maps a Figma variable scope to its Tailwind v4 theme namespace token.
@@ -215,14 +219,15 @@ function resolveTailwindVarName(figVar: Variable, groupSeparator: string, nameOp
  * @param groupSeparator - What Figma's `/` group delimiter becomes in variable names
  * @param nameRegistry - Collects emitted name -> source names, for collision reporting
  * @param nameOptions - Per-run code-syntax option and rejection registry
- * @param appendPxToUnscoped - Emit `px` for numbers whose scoping is undecided
+ * @param unitOptions - The unit (and root font size) numeric dimensions are emitted with
+ * @param appendPxToUnscoped - Also unitize numbers whose scoping is undecided
  * @returns Object containing theme variables and custom variants
  */
 async function processCollection({
     name,
     modes,
     variableIds,
-}: VariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, appendPxToUnscoped: boolean): Promise<{ theme: string[], variants: string[] }> {
+}: VariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, unitOptions: UnitOptions, appendPxToUnscoped: boolean): Promise<{ theme: string[], variants: string[] }> {
     const themeVars: string[] = [];
     const customVariants: string[] = [];
     const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -260,9 +265,9 @@ async function processCollection({
                         cssValue = isColor 
                             ? rgbToCssColor(value as RGBA)
                             : isNumber
-                                ? isDimensionScope(scopes) || (appendPxToUnscoped && isUnscoped(scopes))
-                                    ? `${parseFloat(value as string)}px`
-                                    : `${parseFloat(value as string)}`
+                                ? shouldUnitizeNumericValue(scopes, appendPxToUnscoped)
+                                    ? formatNumericValue(Number(value), unitOptions)
+                                    : formatFloat32(Number(value))
                                 : isBool
                                     ? Boolean(value) ? '1' : '0'
                                     : `"${String(value)}"`;
@@ -297,14 +302,17 @@ async function processCollection({
  *        Defaults to true: Tailwind IntelliSense only suggests theme variables whose
  *        segments are joined by single dashes.
  * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
- * @param appendPxToUnscoped - Append `px` to FLOAT values whose scoping is undecided
- *        (no scopes, or ALL_SCOPES). Scopes explicitly mapped to a non-dimension
- *        type stay unitless regardless.
+ * @param exportUnit - The unit FLOAT values Figma scopes as dimensions are emitted
+ *        with. Scopes explicitly mapped to a non-dimension type stay unitless regardless.
+ * @param rootFontSize - What a `rem` conversion divides by
+ * @param appendPxToUnscoped - Also give the unit to FLOAT values whose scoping is
+ *        undecided (no scopes, or ALL_SCOPES). Off by default.
  * @returns Tailwind CSS string with @theme directive and @custom-variant directives
  */
-export const exportToTailwind = async (useSingleDashSeparator: boolean = true, useCodeSyntaxName: boolean = false, appendPxToUnscoped: boolean = false): Promise<string> => {
+export const exportToTailwind = async (useSingleDashSeparator: boolean = true, useCodeSyntaxName: boolean = false, exportUnit: ExportUnit = DEFAULT_UNIT_OPTIONS.unit, rootFontSize: number = DEFAULT_UNIT_OPTIONS.rootFontSize, appendPxToUnscoped: boolean = false): Promise<string> => {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const groupSeparator = useSingleDashSeparator ? SINGLE_GROUP_SEPARATOR : DEFAULT_GROUP_SEPARATOR;
+    const unitOptions = toUnitOptions(exportUnit, rootFontSize);
     try {
         const themeVars = new Set<string>();  // Use Set to avoid duplicates
         const customVariants: string[] = [];
@@ -312,7 +320,7 @@ export const exportToTailwind = async (useSingleDashSeparator: boolean = true, u
         const nameOptions: NameOptions = { useCodeSyntaxName, rejectedCodeSyntax: new Map<string, string>() };
 
         for(const collection of collections) {
-            const { theme, variants } = await processCollection(collection, groupSeparator, nameRegistry, nameOptions, appendPxToUnscoped);
+            const { theme, variants } = await processCollection(collection, groupSeparator, nameRegistry, nameOptions, unitOptions, appendPxToUnscoped);
             theme.forEach(v => themeVars.add(v));
             customVariants.push(...variants);
         }

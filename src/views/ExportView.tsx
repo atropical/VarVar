@@ -32,8 +32,14 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         setUseSingleDashSeparator,
         useCodeSyntaxName,
         setUseCodeSyntaxName,
+        exportUnit,
+        setExportUnit,
+        rootFontSize,
+        setRootFontSize,
         appendPxToUnscoped,
         setAppendPxToUnscoped,
+        dtcgCompliantValues,
+        setDtcgCompliantValues,
         useLegacyFormat,
         setUseLegacyFormat,
         exportedData,
@@ -73,13 +79,17 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
         }
     }, [format]);
 
-    // Reset appendPxToUnscoped when format changes to one that never emits a
-    // unit on a numeric value (only the CSS/Tailwind output does)
+    // Reset appendPxToUnscoped when the format changes to one that never emits a
+    // unit, so switching back doesn't silently carry a choice made elsewhere.
     useEffect(() => {
-        if (format !== OutputFormats.CSS) {
+        if (format !== OutputFormats.CSS && format !== OutputFormats.JSON) {
             setAppendPxToUnscoped(false);
         }
     }, [format]);
+
+    // The unit choice itself is deliberately kept across format switches: the hook
+    // only sends it for the formats that emit a unit (CSS/Tailwind, JSON), and all
+    // three units it offers are legal everywhere, so nothing needs resetting.
 
     // Clear exported data when format changes to refresh preview
     useEffect(() => {
@@ -121,14 +131,20 @@ export const ExportView: React.FC<ExportViewProps> = ({ editorType = "" }) => {
                 useTailwindFormat={useTailwindFormat}
                 useSingleDashSeparator={useSingleDashSeparator}
                 useCodeSyntaxName={useCodeSyntaxName}
+                exportUnit={exportUnit}
+                rootFontSize={rootFontSize}
                 appendPxToUnscoped={appendPxToUnscoped}
+                dtcgCompliantValues={dtcgCompliantValues}
                 useLegacyFormat={useLegacyFormat}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={setUseRowColumnPos}
                 onUseTailwindFormatChange={setUseTailwindFormat}
                 onUseSingleDashSeparatorChange={setUseSingleDashSeparator}
                 onUseCodeSyntaxNameChange={setUseCodeSyntaxName}
+                onExportUnitChange={setExportUnit}
+                onRootFontSizeChange={setRootFontSize}
                 onAppendPxToUnscopedChange={setAppendPxToUnscoped}
+                onDtcgCompliantValuesChange={setDtcgCompliantValues}
                 onUseLegacyFormatChange={setUseLegacyFormat}
             />
 

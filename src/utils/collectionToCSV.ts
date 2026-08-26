@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { cleanFloat32 } from "./numberFormat";
 import { getMatchingModeName, CODE_SYNTAX_PLATFORMS } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
 import { resolveScopedType } from "./scopeToDTCG";
@@ -51,7 +52,7 @@ function formatCsvLeafValue(
   let formatted: string | boolean | number | RGB = isColor
     ? rgbToCssColor(value as RGBA)
     : isNumber
-      ? parseFloat(value as string)
+      ? cleanFloat32(Number(value))
       : isBool
         ? Boolean(value)
         : String(value);

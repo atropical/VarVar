@@ -24,8 +24,8 @@ export const ExportHeader: React.FC<ExportHeaderProps> = ({ format }) => {
                 };
             case OutputFormats.CSS:
                 return {
-                    title: "Export as CSS",
-                    description: "Export variables as CSS custom properties (CSS variables) for web development."
+                    title: "Export as CSS & Tailwind",
+                    description: "Export variables as CSS custom properties, optionally as a Tailwind CSS (v4) theme."
                 };
             case OutputFormats.JS:
                 return {

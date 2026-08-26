@@ -89,7 +89,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
                     border: 'var(--figma-color-border)',
                     borderRadius: 4,
                     padding: 8,
-                    backgroundColor: 'rgba(0,0,0,.25)',
+                    backgroundColor: 'var(--vv-code-bg)',
                     minWidth: 0,
                     maxWidth: '100%',
                     boxSizing: 'border-box',

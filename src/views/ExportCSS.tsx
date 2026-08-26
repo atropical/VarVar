@@ -29,6 +29,10 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
         setUseSingleDashSeparator,
         useCodeSyntaxName,
         setUseCodeSyntaxName,
+        exportUnit,
+        setExportUnit,
+        rootFontSize,
+        setRootFontSize,
         appendPxToUnscoped,
         setAppendPxToUnscoped,
         exportedData,
@@ -50,12 +54,16 @@ export const ExportCSS: React.FC<ExportCSSProps> = ({ editorType = "" }) => {
                 useTailwindFormat={useTailwindFormat}
                 useSingleDashSeparator={useSingleDashSeparator}
                 useCodeSyntaxName={useCodeSyntaxName}
+                exportUnit={exportUnit}
+                rootFontSize={rootFontSize}
                 appendPxToUnscoped={appendPxToUnscoped}
                 onSeeOutputChange={setSeeOutput}
                 onUseRowColumnPosChange={() => {}}
                 onUseTailwindFormatChange={setUseTailwindFormat}
                 onUseSingleDashSeparatorChange={setUseSingleDashSeparator}
                 onUseCodeSyntaxNameChange={setUseCodeSyntaxName}
+                onExportUnitChange={setExportUnit}
+                onRootFontSizeChange={setRootFontSize}
                 onAppendPxToUnscopedChange={setAppendPxToUnscoped}
             />
 

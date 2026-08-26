@@ -1,34 +1,72 @@
-import { rgbToCssColor } from "./color";
+import { rgbToCssColor, toDtcgColorValue } from "./color";
+import { cleanFloat32 } from "./numberFormat";
 import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
-import { resolveScopedType, isDimensionScope } from "./scopeToDTCG";
+import { resolveEmittedType, shouldUnitizeNumericValue } from "./scopeToDTCG";
+import { DEFAULT_UNIT_OPTIONS, formatDtcgNumericValue, toUnitOptions } from "./units";
+import type { DtcgDimensionValue, UnitOptions } from "./units";
+import type { DtcgColorValue } from "./colorSpaces";
 import { toFileSlug } from "./stringTransformation";
-import type { ExportFile } from "../types.d";
+import type { ExportFile, ExportUnit } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
+
+/**
+ * How a JSON export shapes its values: the unit dimension-scoped numbers get,
+ * whether default-scoped numbers count as dimensions too, and whether values
+ * that DTCG spells as objects — a dimension's `{value, unit}`, a colour's
+ * `{colorSpace, components}` — are written that way or in the older string
+ * spellings (`"16px"`, `"#ff00ff"`) earlier versions emitted.
+ */
+export interface JsonValueOptions {
+  unitOptions: UnitOptions;
+  appendPxToUnscoped: boolean;
+  dtcgCompliantValues: boolean;
+}
+
+/**
+ * Whether a FLOAT value with these scopes is actually emitted with a unit — the
+ * one question both the `$value` shape and the `$type` beside it depend on. A
+ * unit of "none" means nothing is unitised, whatever the scopes say.
+ * @param resolvedType - The variable's resolved data type
+ * @param scopes - The variable's scopes
+ * @param options - The export's value-shaping options
+ */
+function isUnitizedValue(
+  resolvedType: VariableResolvedDataType,
+  scopes: VariableScope[],
+  options: JsonValueOptions
+): boolean {
+  return resolvedType === "FLOAT"
+    && options.unitOptions.unit !== "none"
+    && shouldUnitizeNumericValue(scopes, options.appendPxToUnscoped);
+}
 
 /**
  * Formats a resolved (non-alias) variable value for JSON output
  * @param value - The raw variable value
  * @param resolvedType - The variable's resolved data type
  * @param scopes - The variable's scopes, used to decide dimension formatting
+ * @param options - The export's value-shaping options
  * @returns The formatted $value
  */
 function formatLeafValue(
   value: VariableValue,
   resolvedType: VariableResolvedDataType,
-  scopes: VariableScope[]
-): string | number | boolean {
+  scopes: VariableScope[],
+  options: JsonValueOptions
+): string | number | boolean | DtcgDimensionValue | DtcgColorValue {
   const isColor = resolvedType === "COLOR";
   const isNumber = resolvedType === "FLOAT";
   const isBool = resolvedType === "BOOLEAN";
-  const isDimension = isNumber && isDimensionScope(scopes);
 
   return isColor
-    ? rgbToCssColor(value as RGBA)
+    ? options.dtcgCompliantValues
+      ? toDtcgColorValue(value as RGBA)
+      : rgbToCssColor(value as RGBA)
     : isNumber
-      ? isDimension
-        ? `${parseFloat(value as string)}px`
-        : parseFloat(value as string)
+      ? isUnitizedValue(resolvedType, scopes, options)
+        ? formatDtcgNumericValue(Number(value), options.unitOptions, options.dtcgCompliantValues)
+        : cleanFloat32(Number(value))
       : isBool
         ? Boolean(value)
         : String(value);
@@ -78,13 +116,14 @@ async function resolveAliasValue(
 /**
  * Processes a variable collection into JSON format
  * @param collection - The variable collection to process
+ * @param options - The export's value-shaping options
  * @returns Array of JSON objects representing the collection
  */
 async function processCollection({
     name,
     modes,
     variableIds,
-}: VariableCollection): Promise<[]> {
+}: VariableCollection, options: JsonValueOptions): Promise<[]> {
   const collection: [] = [];
 
   for(const mode of modes) {
@@ -104,7 +143,7 @@ async function processCollection({
             obj[groupName] = obj[groupName] || {};
             obj = obj[groupName];
           });
-          obj.$type = resolveScopedType(scopes, resolvedType);
+          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options), value);
           obj.$description = description || '';
           obj.$extensions = { figma: { scopes, resolvedType, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
@@ -112,7 +151,7 @@ async function processCollection({
             obj.$value = await resolveAliasValue(value, mode.name);
           }
           else {
-            obj.$value = formatLeafValue(value, resolvedType, scopes);
+            obj.$value = formatLeafValue(value, resolvedType, scopes, options);
           }
         }
       }
@@ -127,9 +166,10 @@ async function processCollection({
  * the inheritance model: overridden values get their own $value, everything else
  * becomes an alias reference into the parent collection's tokens.
  * @param extCollection - The extended variable collection to process
+ * @param options - The export's value-shaping options
  * @returns Array of JSON objects representing the extended collection
  */
-async function processExtendedCollection(extCollection: ExtendedVariableCollection): Promise<[]> {
+async function processExtendedCollection(extCollection: ExtendedVariableCollection, options: JsonValueOptions): Promise<[]> {
   const { name, modes, variableIds, variableOverrides, parentVariableCollectionId } = extCollection;
   const collection: [] = [];
   const parentCollection = await figma.variables.getVariableCollectionByIdAsync(parentVariableCollectionId);
@@ -158,7 +198,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
             obj[groupName] = obj[groupName] || {};
             obj = obj[groupName];
           });
-          obj.$type = resolveScopedType(scopes, resolvedType);
+          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options), overrideValue);
           obj.$description = description || '';
           obj.$extensions = { figma: { scopes, resolvedType, inherited: isInherited, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
@@ -171,7 +211,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
             obj.$value = await resolveAliasValue(overrideValue, mode.name);
           }
           else {
-            obj.$value = formatLeafValue(overrideValue, resolvedType, scopes);
+            obj.$value = formatLeafValue(overrideValue, resolvedType, scopes, options);
           }
         }
       }
@@ -189,17 +229,32 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
  * extended collections are present, base collections are combined into one
  * "base.tokens" file and each extended collection is exported as its own file,
  * so the inheritance hierarchy is preserved instead of flattened.
+ * @param exportUnit - The unit numeric dimension values are emitted with (`px`,
+ *        `rem`, or "none" for a bare number). These are exactly the units DTCG
+ *        defines for a `dimension`.
+ * @param rootFontSize - What a `rem` conversion divides by
+ * @param appendPxToUnscoped - Also give the unit to values whose scoping is undecided
+ *        (no scopes, or ALL_SCOPES). Off by default.
+ * @param dtcgCompliantValues - Emit the spec's object shapes rather than the string
+ *        forms earlier versions emitted: `{ "value": 16, "unit": "px" }` for a
+ *        dimension, and `{ "colorSpace": "srgb", "components": [...] }` for a colour.
+ *        On by default; turning it off is an escape hatch for existing consumers.
  * @returns Array of exported files
  */
-export const exportToJSON = async (): Promise<ExportFile[] | undefined> => {
+export const exportToJSON = async (exportUnit: ExportUnit = DEFAULT_UNIT_OPTIONS.unit, rootFontSize: number = DEFAULT_UNIT_OPTIONS.rootFontSize, appendPxToUnscoped: boolean = false, dtcgCompliantValues: boolean = true): Promise<ExportFile[] | undefined> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const valueOptions: JsonValueOptions = {
+    unitOptions: toUnitOptions(exportUnit, rootFontSize),
+    appendPxToUnscoped,
+    dtcgCompliantValues,
+  };
   try {
     const hasExtendedCollections = collections.some((collection) => collection.isExtension);
 
     if (!hasExtendedCollections) {
       const files: any[] = [];
       for (const collection of collections) {
-        files.push(...(await processCollection(collection)));
+        files.push(...(await processCollection(collection, valueOptions)));
       }
       return [{ filename: "variables", content: JSON.stringify(files, null, 2) }];
     }
@@ -209,7 +264,7 @@ export const exportToJSON = async (): Promise<ExportFile[] | undefined> => {
 
     const baseFiles: any[] = [];
     for (const collection of baseCollections) {
-      baseFiles.push(...(await processCollection(collection)));
+      baseFiles.push(...(await processCollection(collection, valueOptions)));
     }
 
     const result: ExportFile[] = [
@@ -217,7 +272,7 @@ export const exportToJSON = async (): Promise<ExportFile[] | undefined> => {
     ];
 
     for (const extCollection of extendedCollections) {
-      const processed = await processExtendedCollection(extCollection);
+      const processed = await processExtendedCollection(extCollection, valueOptions);
       result.push({
         filename: `${toFileSlug(extCollection.name)}.tokens`,
         content: JSON.stringify(processed, null, 2),

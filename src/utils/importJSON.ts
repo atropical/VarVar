@@ -1,4 +1,8 @@
-import { cssColorToRgba, rgbToCssColor } from "./color";
+import { parseTokenColor, rgbToCssColor } from "./color";
+import { colorConversionNote } from "./colorSpaces";
+import { cleanFloat32 } from "./numberFormat";
+import { DEFAULT_ROOT_FONT_SIZE, isFontRelativeUnit, normalizeRootFontSize, parseUnitValue } from "./units";
+import { DTCG_FONT_WEIGHT_KEYWORDS } from "./scopeToDTCG";
 import { CODE_SYNTAX_PLATFORMS, normalizeCodeSyntax } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
 import { ImportMode } from "../types.d";
@@ -11,6 +15,12 @@ const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
  * when a leaf has neither `$extensions.figma.resolvedType` (current shape)
  * nor a raw `$type` (legacy shape) to read the resolved type from directly —
  * i.e. a plain DTCG token file that was never a VarVar export.
+ *
+ * A `$type` alone doesn't always pin down one Figma type: `fontWeight` is
+ * spec-conformant with either a number or one of the predefined keyword
+ * strings. The entry here is only the type such a token gets when its value
+ * says nothing (an alias reference), and {@link dtcgFallbackType} decides from
+ * the actual value everywhere else.
  */
 const DTCG_TYPE_TO_RESOLVED_TYPE: Record<string, VariableResolvedDataType> = {
   color: "COLOR",
@@ -37,6 +47,12 @@ interface ImportRecord {
   description: string;
   codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
+  /**
+   * True when this mode's value couldn't decide the variable's type — a
+   * `fontWeight` alias reference, which carries no value of its own. Such a
+   * record adopts whatever type the variable's other modes settle on.
+   */
+  typeDeferred: boolean;
 }
 
 function isTokenLeaf(node: unknown): node is Record<string, unknown> {
@@ -46,6 +62,69 @@ function isTokenLeaf(node: unknown): node is Record<string, unknown> {
     "$type" in node &&
     "$value" in node
   );
+}
+
+/**
+ * The Figma resolved type a plain DTCG leaf should become, derived from its
+ * `$type` *and* its actual value.
+ *
+ * `$type` alone is not enough for `fontWeight`: the spec conforms a number in
+ * [1, 1000] and, equally, one of the predefined keyword strings (`"bold"`,
+ * `"semi-bold"`, …). A number becomes a FLOAT variable holding that number and
+ * a keyword becomes a STRING variable holding that keyword verbatim — the value
+ * is never rewritten into the other shape, since translating `"bold"` into 700
+ * would silently make the document say something the file doesn't.
+ *
+ * A non-keyword string under `$type: fontWeight` isn't conformant, but it is
+ * still a string: it is kept exactly as written in a STRING variable, and the
+ * caller is handed a note to warn with.
+ *
+ * @param rawType - The leaf's `$type`
+ * @param rawValue - The leaf's `$value`, which may decide the type
+ * @returns The resolved type (undefined when the `$type` is unsupported),
+ *   whether the value was too uninformative to decide (see
+ *   {@link ImportRecord.typeDeferred}), and an optional warning note.
+ */
+function dtcgFallbackType(rawType: string, rawValue: unknown): {
+  resolvedType: VariableResolvedDataType | undefined;
+  typeDeferred: boolean;
+  note?: string;
+} {
+  const tabled = DTCG_TYPE_TO_RESOLVED_TYPE[rawType];
+
+  if (rawType === "fontFamily" && Array.isArray(rawValue)) {
+    // DTCG allows a font stack (`["Inter", "sans-serif"]`). Figma has no array
+    // variable, so the joined string is the closest thing there is — but it is
+    // a rewrite of the value, so it gets said out loud.
+    return {
+      resolvedType: "STRING",
+      typeDeferred: false,
+      note: `value ${JSON.stringify(rawValue)} is a DTCG font stack; Figma has no list-valued variable, so it was imported as the string "${String(rawValue)}".`,
+    };
+  }
+
+  if (rawType !== "fontWeight") {
+    return { resolvedType: tabled, typeDeferred: false };
+  }
+
+  if (typeof rawValue === "number") {
+    return { resolvedType: "FLOAT", typeDeferred: false };
+  }
+  if (typeof rawValue === "string") {
+    if (isAliasValue(rawValue) || rawValue === "_unlinked") {
+      // A reference has no value of its own; the other modes decide.
+      return { resolvedType: tabled, typeDeferred: true };
+    }
+    if (DTCG_FONT_WEIGHT_KEYWORDS.has(rawValue)) {
+      return { resolvedType: "STRING", typeDeferred: false };
+    }
+    return {
+      resolvedType: "STRING",
+      typeDeferred: false,
+      note: `value "${rawValue}" is not one of the DTCG predefined fontWeight keywords — it was imported verbatim as a string variable.`,
+    };
+  }
+  return { resolvedType: tabled, typeDeferred: false };
 }
 
 /**
@@ -61,14 +140,21 @@ function normalizeLeaf(node: Record<string, unknown>): {
   description: string;
   codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
+  typeDeferred: boolean;
+  note?: string;
 } {
   const extensions = node.$extensions as { figma?: { scopes?: VariableScope[]; resolvedType?: VariableResolvedDataType; codeSyntax?: CodeSyntaxMap } } | undefined;
   const figma = extensions?.figma;
 
   const rawType = node.$type as string | undefined;
-  const resolvedType = figma?.resolvedType
-    ?? (rawType && validTypes.has(rawType) ? (rawType as VariableResolvedDataType) : undefined)
-    ?? (rawType ? DTCG_TYPE_TO_RESOLVED_TYPE[rawType] : undefined);
+  const declaredType = figma?.resolvedType
+    ?? (rawType && validTypes.has(rawType) ? (rawType as VariableResolvedDataType) : undefined);
+  // A file that states the Figma type outright is taken at its word; only a
+  // plain DTCG `$type` has to be read together with its value.
+  const fallback = declaredType === undefined && rawType !== undefined
+    ? dtcgFallbackType(rawType, node.$value)
+    : undefined;
+  const resolvedType = declaredType ?? fallback?.resolvedType;
 
   const scopes = figma?.scopes ?? (node.$scopes as VariableScope[] | undefined) ?? [];
   const description = (node.$description as string) ?? "";
@@ -76,7 +162,15 @@ function normalizeLeaf(node: Record<string, unknown>): {
   // throughout — a file that says nothing about code syntax never touches it.
   const codeSyntax = normalizeCodeSyntax(figma?.codeSyntax);
 
-  return { resolvedType, scopes, description, codeSyntax, rawValue: node.$value };
+  return {
+    resolvedType,
+    scopes,
+    description,
+    codeSyntax,
+    rawValue: node.$value,
+    typeDeferred: fallback?.typeDeferred ?? false,
+    note: fallback?.note,
+  };
 }
 
 function walkVariables(
@@ -85,15 +179,26 @@ function walkVariables(
   modeName: string,
   pathParts: string[],
   records: ImportRecord[],
-  warnings: string[]
+  warnings: string[],
+  unitsSeen: Set<string>
 ): void {
   for (const [key, node] of Object.entries(variables)) {
     if (isTokenLeaf(node)) {
-      const { resolvedType, scopes, description, codeSyntax, rawValue } = normalizeLeaf(node);
+      const { resolvedType, scopes, description, codeSyntax, rawValue, typeDeferred, note } = normalizeLeaf(node);
       const path = [...pathParts, key].join("/");
       if (!resolvedType || !validTypes.has(resolvedType)) {
         warnings.push(`Skipped "${path}" in "${collectionName}" (${modeName}): unrecognized or unsupported $type "${String(node.$type)}".`);
         continue;
+      }
+      // Note every unit the file carries — in either spelling, the "16px"
+      // string or the DTCG `{ value, unit }` object — so the UI can ask for a
+      // root font size when (and only when) a font-relative one is present.
+      if (resolvedType === "FLOAT") {
+        const withUnit = parseUnitValue(rawValue);
+        if (withUnit) unitsSeen.add(withUnit.unit);
+      }
+      if (note) {
+        warnings.push(`"${path}" in "${collectionName}" (${modeName}): ${note}`);
       }
       records.push({
         collectionName,
@@ -104,29 +209,88 @@ function walkVariables(
         description,
         codeSyntax,
         rawValue,
+        typeDeferred,
       });
     } else if (typeof node === "object" && node !== null) {
-      walkVariables(node as Record<string, unknown>, collectionName, modeName, [...pathParts, key], records, warnings);
+      walkVariables(node as Record<string, unknown>, collectionName, modeName, [...pathParts, key], records, warnings, unitsSeen);
     }
   }
 }
 
 /**
- * Parses and merges every raw JSON file's `{collection, mode, variables}[]`
- * array into a flat list of per-variable-per-mode records.
+ * Forces every mode of one variable onto a single Figma resolved type.
+ *
+ * A Figma variable has one resolved type across all its modes, but a file can
+ * disagree with itself — most plausibly a `fontWeight` token written as the
+ * number 700 in one mode and the keyword `"bold"` in another, each perfectly
+ * conformant on its own. Left alone, the type of whichever mode happened to be
+ * read first would decide the variable and the other modes' values would fail
+ * to be written.
+ *
+ * The rule: a FLOAT/STRING disagreement resolves to STRING, because a STRING
+ * variable can hold every mode's value exactly as the file spells it (`700`
+ * becomes `"700"`, `"bold"` stays `"bold"`), whereas FLOAT would require
+ * translating keywords into numbers the file never said. Any other
+ * disagreement (a genuinely incoherent file — COLOR against BOOLEAN, say) keeps
+ * the first mode's type, which is what earlier versions did. Either way the
+ * variable is named in a warning.
+ *
+ * Modes whose value couldn't decide a type (`typeDeferred` — an alias
+ * reference) don't get a vote, but do adopt the outcome.
  */
-function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings: string[] } {
+function reconcileRecordTypes(records: ImportRecord[], warnings: string[]): void {
+  const groups = new Map<string, ImportRecord[]>();
+  for (const record of records) {
+    const key = `${record.collectionName}\u0000${record.pathParts.join("/")}`;
+    const group = groups.get(key);
+    if (group) group.push(record);
+    else groups.set(key, [record]);
+  }
+
+  for (const group of groups.values()) {
+    const decisive = group.filter((record) => !record.typeDeferred);
+    const types = [...new Set(decisive.map((record) => record.resolvedType))];
+
+    if (types.length === 0) continue;
+
+    if (types.length > 1) {
+      const isFloatStringMix = types.every((type) => type === "FLOAT" || type === "STRING");
+      const chosen = isFloatStringMix ? "STRING" : decisive[0].resolvedType;
+      const perMode = decisive.map((record) => `${record.modeName}: ${record.resolvedType}`).join(", ");
+      warnings.push(
+        `Variable "${group[0].pathParts.join("/")}" in "${group[0].collectionName}" has values of different types across modes (${perMode}). `
+        + `A Figma variable has one type for all modes, so it was imported as ${chosen}`
+        + (isFloatStringMix ? ", which keeps every mode's value exactly as the file spells it." : ", the type of its first mode.")
+      );
+      for (const record of group) record.resolvedType = chosen;
+      continue;
+    }
+
+    // Single agreed type — hand it to the modes that had no value to decide with.
+    for (const record of group) record.resolvedType = types[0];
+  }
+}
+
+/**
+ * Parses and merges every raw JSON file's `{collection, mode, variables}[]`
+ * array into a flat list of per-variable-per-mode records, alongside every
+ * CSS unit suffix those records' numeric values carry.
+ */
+function collectRecords(rawFiles: string[]): { records: ImportRecord[]; warnings: string[]; unitsSeen: string[] } {
   const records: ImportRecord[] = [];
   const warnings: string[] = [];
+  const unitsSeen = new Set<string>();
 
   for (const raw of rawFiles) {
     const entries: ImportFileEntry[] = JSON.parse(raw);
     for (const entry of entries) {
-      walkVariables(entry.variables, entry.collection, entry.mode, [], records, warnings);
+      walkVariables(entry.variables, entry.collection, entry.mode, [], records, warnings, unitsSeen);
     }
   }
 
-  return { records, warnings };
+  reconcileRecordTypes(records, warnings);
+
+  return { records, warnings, unitsSeen: [...unitsSeen].sort() };
 }
 
 /**
@@ -314,15 +478,85 @@ async function findVariableByName(collection: VariableCollection, name: string):
   return variables.find((v): v is Variable => v !== null && v.name === name);
 }
 
+/**
+ * Turns an imported numeric value back into the plain number Figma stores,
+ * honouring the unit when the value carries one.
+ *
+ * A numeric value can carry its unit in either of two spellings, and both are
+ * accepted (including mixed within one file):
+ *
+ * - the DTCG object form the exporter now emits, `{ "value": 16, "unit": "px" }`;
+ * - the `"16px"` string earlier versions emitted, which the exporter still
+ *   offers as an escape hatch.
+ *
+ * From there:
+ *
+ * - `rem`/`em` are font-relative, so the number is multiplied by the root font
+ *   size the user gave: `"2rem"` with a root of 16 becomes 32. The product goes
+ *   through {@link cleanFloat32} so the multiplication can't reintroduce the
+ *   float noise that function exists to strip.
+ * - `px` maps 1:1 onto a Figma number, so the unit is simply dropped.
+ * - Any other unit (`pt`, `vh`, `%`, …) has no Figma equivalent. The unit is
+ *   dropped and the number kept as-is — exactly what every earlier version did
+ *   — but the caller is told so it can warn, since that really is lossy.
+ * - Anything carrying no unit at all (a bare number, or junk) falls through to
+ *   plain `parseFloat`, which is what this function used to be.
+ *
+ * @param raw - The raw `$value`, in whichever shape the file spells it
+ * @param rootFontSize - Already-normalized root font size to multiply `rem`/`em` by
+ * @param onLossyUnit - Called with the unit name when a unit is dropped lossily
+ */
+function parseImportedNumber(
+  raw: unknown,
+  rootFontSize: number,
+  onLossyUnit: (unit: string) => void
+): number {
+  const withUnit = parseUnitValue(raw);
+  if (!withUnit) return parseFloat(String(raw));
+
+  if (isFontRelativeUnit(withUnit.unit)) {
+    return cleanFloat32(withUnit.number * rootFontSize);
+  }
+  if (withUnit.unit !== "px") onLossyUnit(withUnit.unit);
+  return withUnit.number;
+}
+
+/**
+ * Renders a raw `$value` for a warning message. Objects (the DTCG
+ * `{ value, unit }` dimension and `{ colorSpace, components }` colour shapes)
+ * go through JSON.stringify so the message says what was actually in the file
+ * rather than "[object Object]".
+ */
+function describeRawValue(raw: unknown): string {
+  return typeof raw === "object" && raw !== null ? JSON.stringify(raw) : String(raw);
+}
+
+/**
+ * Turns one token file's `$value` into the value Figma stores for it.
+ *
+ * @param rawValue - The raw `$value`, in whichever shape the file spells it
+ * @param resolvedType - The Figma type the variable is being imported as
+ * @param rootFontSize - Already-normalized root font size for `rem`/`em`
+ * @param onLossyUnit - Called with the unit name when a unit is dropped lossily
+ * @param onColorNote - Called when a colour had to be converted out of a colour
+ *   space Figma variables cannot store (see {@link colorConversionNote})
+ */
 function parseLiteralValue(
   rawValue: unknown,
-  resolvedType: VariableResolvedDataType
+  resolvedType: VariableResolvedDataType,
+  rootFontSize: number,
+  onLossyUnit: (unit: string) => void,
+  onColorNote: (note: string) => void
 ): VariableValue {
   switch (resolvedType) {
-    case "COLOR":
-      return cssColorToRgba(String(rawValue));
+    case "COLOR": {
+      const parsed = parseTokenColor(rawValue);
+      const note = colorConversionNote(parsed);
+      if (note) onColorNote(note);
+      return parsed.rgba;
+    }
     case "FLOAT":
-      return parseFloat(String(rawValue));
+      return parseImportedNumber(rawValue, rootFontSize, onLossyUnit);
     case "BOOLEAN":
       return Boolean(rawValue);
     default:
@@ -351,22 +585,41 @@ async function formatStoredValue(value: VariableValue | undefined, type: Variabl
 
 /**
  * Whether an existing stored value already equals the literal value about to
- * be imported. `after` always came from parsing an exported file, so for
- * COLOR it can never be more precise than the export format's own
- * quantization (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for
- * alpha) — comparing at full float precision against a native Figma color
- * (which isn't necessarily on that grid) would report a "change" on every
- * re-import of a file exported by this same plugin. Both sides are rounded
- * to that grid before comparing, so only a color that's actually different
- * once round-tripped through the export format counts as changed.
+ * be imported.
+ *
+ * COLOR needs a tolerance, and which tolerance depends on how the file spelled
+ * the colour:
+ *
+ * - A CSS colour string carries the export format's own quantization
+ *   (`rgbToCssColor`: 8-bit per RGB channel, 2 decimal places for alpha), so an
+ *   imported value can never be more precise than that. Comparing at full float
+ *   precision against a native Figma colour (which isn't on that grid) would
+ *   report a "change" on every re-import of a file this plugin wrote, so both
+ *   sides are rounded to the 8-bit grid first.
+ * - The DTCG object form carries the full channel values, so it is compared on
+ *   the float32 grid Figma actually stores colours on instead — precise enough
+ *   that a real sub-1/255 change is seen, and still stable across re-imports
+ *   (the exported decimal and the stored channel are the same float32 even when
+ *   they are different doubles, which is the whole point of `cleanFloat32`).
+ *
+ * @param before - The variable's current value for this mode
+ * @param after - The value parsed out of the file
+ * @param type - The variable's resolved type
+ * @param quantized - True when the file spelled this value in a form that has
+ *   already lost precision — i.e. a CSS colour string
  */
-function literalValueEquals(before: VariableValue | undefined, after: VariableValue, type: VariableResolvedDataType): boolean {
+function literalValueEquals(
+  before: VariableValue | undefined,
+  after: VariableValue,
+  type: VariableResolvedDataType,
+  quantized: boolean
+): boolean {
   if (before === undefined || isAliasStoredValue(before)) return false;
   if (type === "COLOR") {
     const a = before as RGBA;
     const b = after as RGBA;
-    const ch = (n: number) => Math.round(n * 255);
-    const alpha = (n: number) => Math.round(n * 100);
+    const ch = quantized ? (n: number) => Math.round(n * 255) : Math.fround;
+    const alpha = quantized ? (n: number) => Math.round(n * 100) : Math.fround;
     return ch(a.r) === ch(b.r) && ch(a.g) === ch(b.g) && ch(a.b) === ch(b.b) && alpha(a.a) === alpha(b.a);
   }
   return before === after;
@@ -432,6 +685,36 @@ function applyCodeSyntax(
   }
 }
 
+/**
+ * Writes scopes onto a variable, tolerating a scope Figma refuses for that
+ * variable's type.
+ *
+ * Scopes and types aren't fully orthogonal in Figma, and the import can now
+ * legitimately create a STRING variable from a FONT_WEIGHT-scoped token (a
+ * `fontWeight` keyword). If Figma won't take the scope, the value is still
+ * worth importing — the scope is dropped with a warning rather than aborting.
+ * @param variable - The variable to write to
+ * @param scopes - The scopes the file carries
+ * @param summary - Run summary, for any warning
+ * @param collectionName - Collection name, for warning text
+ * @param path - Variable path, for warning text
+ */
+function applyScopes(
+  variable: Variable,
+  scopes: VariableScope[],
+  summary: ImportSummary,
+  collectionName: string,
+  path: string
+): void {
+  try {
+    variable.scopes = scopes;
+  } catch (err) {
+    summary.warnings.push(
+      `Could not apply scopes [${scopes.join(", ")}] to "${path}" in "${collectionName}" (${variable.resolvedType}): ${err instanceof Error ? err.message : String(err)} — the variable was imported without them.`
+    );
+  }
+}
+
 function scopesEqual(a: VariableScope[], b: VariableScope[]): boolean {
   if (a.length !== b.length) return false;
   const setB = new Set(b);
@@ -470,8 +753,13 @@ function syntheticModeId(collectionName: string, modeName: string): string {
  * created/updated/deleted) are still recorded into `diff` and `summary`.
  * This guarantees the preview a user sees and the run they confirm can
  * never drift apart, since it's the same code path either way.
+ *
+ * `rootFontSize` is what any `rem`/`em` value in the file is multiplied by to
+ * get back to the number Figma stores; it is normalized here so an empty, zero
+ * or non-numeric entry can only ever fall back to 16.
  */
-async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boolean): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boolean, rootFontSize: number): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+  const rootSize = normalizeRootFontSize(rootFontSize);
   const summary: ImportSummary = {
     collectionsCreated: 0,
     collectionsReused: 0,
@@ -485,12 +773,16 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     aliasesResolved: 0,
     codeSyntaxSet: 0,
     warnings: [],
+    unitsSeen: [],
+    hasFontRelativeUnits: false,
   };
 
   const diff: ImportDiff = { collections: [], modes: [], variables: [] };
 
-  const { records, warnings: parseWarnings } = collectRecords(rawFiles);
+  const { records, warnings: parseWarnings, unitsSeen } = collectRecords(rawFiles);
   summary.warnings.push(...parseWarnings);
+  summary.unitsSeen = unitsSeen;
+  summary.hasFontRelativeUnits = unitsSeen.some(isFontRelativeUnit);
 
   if (records.length === 0) {
     summary.warnings.push("No importable variables were found in the selected file(s) — nothing was changed.");
@@ -646,7 +938,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
         summary.codeSyntaxSet += codeSyntaxDiff.filter((entry) => entry.changed).length;
       } else if (varRef.real) {
         if (descriptionChanged) varRef.real.description = record.description;
-        if (scopesChanged) varRef.real.scopes = record.scopes;
+        if (scopesChanged) applyScopes(varRef.real, record.scopes, summary, record.collectionName, varName);
         applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
     } else {
@@ -673,7 +965,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
       } else if (varRef.real) {
         varRef.real.description = record.description;
         if (record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES")) {
-          varRef.real.scopes = record.scopes;
+          applyScopes(varRef.real, record.scopes, summary, record.collectionName, varName);
         }
         applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
@@ -697,14 +989,43 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     modeRef: ModeRef,
     diffEntry: ImportDiffVariable | undefined
   ): Promise<void> => {
-    const newValue = parseLiteralValue(record.rawValue, record.resolvedType);
+    let newValue: VariableValue;
+    try {
+      newValue = parseLiteralValue(
+        record.rawValue,
+        record.resolvedType,
+        rootSize,
+        (unit) => {
+          summary.warnings.push(
+            `Value "${describeRawValue(record.rawValue)}" for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}) uses "${unit}", which has no Figma equivalent — the unit was dropped and the number imported as-is.`
+          );
+        },
+        (note) => {
+          summary.warnings.push(
+            `"${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${note}`
+          );
+        }
+      );
+    } catch (err) {
+      // A value the parsers can't read at all (a colour spelling they don't
+      // know, say) costs that one mode, not the whole import.
+      summary.warnings.push(
+        `Skipped value ${describeRawValue(record.rawValue)} for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
     const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real)
       ? varRef.real.valuesByMode[modeRef.modeId]
       : undefined;
     const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
     const after = formatLiteral(newValue, record.resolvedType);
 
-    const changed = !literalValueEquals(beforeRaw, newValue, record.resolvedType);
+    const changed = !literalValueEquals(
+      beforeRaw,
+      newValue,
+      record.resolvedType,
+      typeof record.rawValue === "string"
+    );
     diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
 
     // Skip the write entirely when the stored value already matches — a
@@ -904,8 +1225,12 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
  * create, update or delete — without touching the document. Safe to call
  * freely for preview purposes.
  */
-export async function previewImport(rawFiles: string[], importMode: ImportMode): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
-  return runImport(rawFiles, importMode, true);
+export async function previewImport(
+  rawFiles: string[],
+  importMode: ImportMode,
+  rootFontSize: number = DEFAULT_ROOT_FONT_SIZE
+): Promise<{ summary: ImportSummary; diff: ImportDiff }> {
+  return runImport(rawFiles, importMode, true, rootFontSize);
 }
 
 /**
@@ -918,8 +1243,14 @@ export async function previewImport(rawFiles: string[], importMode: ImportMode):
  * @param importMode - How to reconcile the import against existing local
  *   collections: additive merge, update-existing-only, merge-then-prune
  *   (sync), or wipe-then-import (clean). See {@link ImportMode}.
+ * @param rootFontSize - What a `rem`/`em` value in the file is multiplied by to
+ *   get the number Figma stores. Defaults to 16; an invalid value falls back to it.
  */
-export async function importVariables(rawFiles: string[], importMode: ImportMode): Promise<ImportSummary> {
-  const { summary } = await runImport(rawFiles, importMode, false);
+export async function importVariables(
+  rawFiles: string[],
+  importMode: ImportMode,
+  rootFontSize: number = DEFAULT_ROOT_FONT_SIZE
+): Promise<ImportSummary> {
+  const { summary } = await runImport(rawFiles, importMode, false, rootFontSize);
   return summary;
 }

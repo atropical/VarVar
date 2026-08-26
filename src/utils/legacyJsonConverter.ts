@@ -8,6 +8,17 @@ interface LegacyTokenFile {
 
 const PX_VALUE = /^(-?\d+(?:\.\d+)?)px$/;
 
+/** The DTCG `dimension` shape: `{ "value": 16, "unit": "px" }`. */
+function isDimensionObject(node: unknown): boolean {
+  return (
+    typeof node === "object" &&
+    node !== null &&
+    !Array.isArray(node) &&
+    typeof (node as { value?: unknown }).value === "number" &&
+    typeof (node as { unit?: unknown }).unit === "string"
+  );
+}
+
 function isTokenLeaf(node: unknown): node is Record<string, unknown> {
   return (
     typeof node === "object" &&
@@ -21,7 +32,7 @@ function isTokenLeaf(node: unknown): node is Record<string, unknown> {
  * Rewrites a single DTCG token leaf (as produced by the current exporter) into the
  * flat pre-`12930fe` (v2.x) shape: raw `resolvedType` as `$type`, scopes as a sibling
  * `$scopes` key instead of `$extensions.figma.scopes`, and bare numeric `$value`s
- * (no `"px"` suffix). Relies on `$extensions.figma.resolvedType`, which the exporter
+ * (neither a `"px"` suffix nor a DTCG `{ value, unit }` object). Relies on `$extensions.figma.resolvedType`, which the exporter
  * stores specifically so this conversion can be lossless.
  */
 function toLegacyLeaf(node: Record<string, unknown>): Record<string, unknown> {
@@ -34,6 +45,13 @@ function toLegacyLeaf(node: Record<string, unknown>): Record<string, unknown> {
     if (match) {
       value = parseFloat(match[1]);
     }
+  } else if (isDimensionObject(value)) {
+    // The DTCG `{ value, unit }` dimension shape, unwrapped back to the bare
+    // number v2.x used. Defensive: the legacy export path forces the unit to
+    // "none", so no dimension object should ever reach here — but if one did,
+    // leaving an object in the output would break every v2.x consumer, which
+    // is worse than dropping a unit v2.x never had a way to express.
+    value = (value as { value: number }).value;
   }
 
   return {

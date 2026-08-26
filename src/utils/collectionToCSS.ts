@@ -10,7 +10,11 @@ import {
   buildCodeSyntaxComment
 } from "./stringTransformation";
 import type { NameOptions } from "./stringTransformation";
-import { isDimensionScope, isUnscoped } from "./scopeToDTCG";
+import { shouldUnitizeNumericValue } from "./scopeToDTCG";
+import { formatFloat32 } from "./numberFormat";
+import { DEFAULT_UNIT_OPTIONS, formatNumericValue, toUnitOptions } from "./units";
+import type { UnitOptions } from "./units";
+import type { ExportUnit } from "../types.d";
 
 /**
  * Resolves the `--`-prefixed CSS custom property name a variable is emitted as.
@@ -42,12 +46,14 @@ const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
  * @param value - The raw variable value
  * @param resolvedType - The variable's resolved data type
  * @param scopes - The variable's scopes, used to decide dimension formatting
- * @param appendPxToUnscoped - Also emit `px` for numbers whose scoping is undecided
+ * @param unitOptions - The unit (and root font size) numeric dimensions are emitted with
+ * @param appendPxToUnscoped - Also unitize numbers whose scoping is undecided
  */
 function formatCssValue(
   value: VariableValue,
   resolvedType: VariableResolvedDataType,
   scopes: VariableScope[],
+  unitOptions: UnitOptions,
   appendPxToUnscoped: boolean
 ): string {
   const isColor = resolvedType === "COLOR";
@@ -57,9 +63,9 @@ function formatCssValue(
   return isColor
     ? rgbToCssColor(value as RGBA)
     : isNumber
-      ? isDimensionScope(scopes) || (appendPxToUnscoped && isUnscoped(scopes))
-        ? `${parseFloat(value as string)}px`
-        : `${parseFloat(value as string)}`
+      ? shouldUnitizeNumericValue(scopes, appendPxToUnscoped)
+        ? formatNumericValue(Number(value), unitOptions)
+        : formatFloat32(Number(value))
       : isBool
         ? Boolean(value) ? 'var(--TRUE)' : 'var(--FALSE)'
         : `"${String(value)}"`;
@@ -85,14 +91,15 @@ async function resolveCssAliasValue(alias: VariableAlias, groupSeparator: string
  * @param groupSeparator - What Figma's `/` group delimiter becomes in variable names
  * @param nameRegistry - Collects emitted name -> source names, for collision reporting
  * @param nameOptions - Per-run code-syntax option and rejection registry
- * @param appendPxToUnscoped - Emit `px` for numbers whose scoping is undecided
+ * @param unitOptions - The unit (and root font size) numeric dimensions are emitted with
+ * @param appendPxToUnscoped - Also unitize numbers whose scoping is undecided
  * @returns Object containing root variables and theme-specific CSS blocks
  */
 async function processCollection({
     name,
     modes,
     variableIds,
-}: VariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, appendPxToUnscoped: boolean): Promise<{ root: string[], theme: string[] }> {
+}: VariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, unitOptions: UnitOptions, appendPxToUnscoped: boolean): Promise<{ root: string[], theme: string[] }> {
   const collection: string[] = [];
   let rootVars: string[] = [];
 
@@ -109,7 +116,7 @@ async function processCollection({
           const cssVarName = resolveCssVarName(figVar, groupSeparator, nameOptions);
           const cssValue = typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS'
             ? await resolveCssAliasValue(value, groupSeparator, nameOptions)
-            : formatCssValue(value, resolvedType, scopes, appendPxToUnscoped);
+            : formatCssValue(value, resolvedType, scopes, unitOptions, appendPxToUnscoped);
 
           recordEmittedVarName(nameRegistry, cssVarName, varName);
           cssVars.push(`  ${cssVarName}: ${cssValue};${description ? `\t/* ${description} */` : ''}`);
@@ -140,9 +147,10 @@ async function processCollection({
  * @param groupSeparator - What Figma's `/` group delimiter becomes in variable names
  * @param nameRegistry - Collects emitted name -> source names, for collision reporting
  * @param nameOptions - Per-run code-syntax option and rejection registry
- * @param appendPxToUnscoped - Emit `px` for numbers whose scoping is undecided
+ * @param unitOptions - The unit (and root font size) numeric dimensions are emitted with
+ * @param appendPxToUnscoped - Also unitize numbers whose scoping is undecided
  */
-async function processExtendedCollection(extCollection: ExtendedVariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, appendPxToUnscoped: boolean): Promise<{ root: string[], theme: string[] }> {
+async function processExtendedCollection(extCollection: ExtendedVariableCollection, groupSeparator: string, nameRegistry: Map<string, Set<string>>, nameOptions: NameOptions, unitOptions: UnitOptions, appendPxToUnscoped: boolean): Promise<{ root: string[], theme: string[] }> {
   const { name, modes, variableIds, variableOverrides } = extCollection;
   const collection: string[] = [];
   let rootVars: string[] = [];
@@ -168,7 +176,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           const cssVarName = resolveCssVarName(figVar, groupSeparator, nameOptions);
           const cssValue = typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS'
             ? await resolveCssAliasValue(overrideValue, groupSeparator, nameOptions)
-            : formatCssValue(overrideValue, resolvedType, scopes, appendPxToUnscoped);
+            : formatCssValue(overrideValue, resolvedType, scopes, unitOptions, appendPxToUnscoped);
 
           recordEmittedVarName(nameRegistry, cssVarName, varName);
           cssVars.push(`  ${cssVarName}: ${cssValue};${description ? `\t/* ${description} */` : ''}`);
@@ -191,14 +199,18 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
  * Exports all local variable collections to CSS format
  * @param useSingleDashSeparator - Join Figma groups with a single dash instead of `--`
  * @param useCodeSyntaxName - Emit each variable under its Web code syntax, when it has one
- * @param appendPxToUnscoped - Append `px` to FLOAT values whose scoping is undecided
- *        (no scopes, or ALL_SCOPES). Scopes explicitly mapped to a non-dimension
- *        type stay unitless regardless.
+ * @param exportUnit - The unit FLOAT values Figma scopes as dimensions are emitted
+ *        with. Scopes explicitly mapped to a non-dimension type stay unitless regardless.
+ * @param rootFontSize - What a `rem` conversion divides by
+ * @param appendPxToUnscoped - Also give the unit to FLOAT values whose scoping is
+ *        undecided (no scopes, or ALL_SCOPES). Off by default: nothing about those
+ *        variables says they are lengths.
  * @returns CSS string with custom properties and theme selectors
  */
-export const exportToCSS = async (useSingleDashSeparator: boolean = false, useCodeSyntaxName: boolean = false, appendPxToUnscoped: boolean = false): Promise<string> => {
+export const exportToCSS = async (useSingleDashSeparator: boolean = false, useCodeSyntaxName: boolean = false, exportUnit: ExportUnit = DEFAULT_UNIT_OPTIONS.unit, rootFontSize: number = DEFAULT_UNIT_OPTIONS.rootFontSize, appendPxToUnscoped: boolean = false): Promise<string> => {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   const groupSeparator = useSingleDashSeparator ? SINGLE_GROUP_SEPARATOR : DEFAULT_GROUP_SEPARATOR;
+  const unitOptions = toUnitOptions(exportUnit, rootFontSize);
   try {
     const rootVars = new Set<string>();  // Use Set to avoid duplicates
     const nonRootBlocks: string[] = [];
@@ -212,13 +224,13 @@ export const exportToCSS = async (useSingleDashSeparator: boolean = false, useCo
     // overrides are declared later in the merged :root block and win
     // the CSS cascade.
     for(const collection of baseCollections) {
-      const { root, theme } = await processCollection(collection, groupSeparator, nameRegistry, nameOptions, appendPxToUnscoped);
+      const { root, theme } = await processCollection(collection, groupSeparator, nameRegistry, nameOptions, unitOptions, appendPxToUnscoped);
       root.forEach(v => rootVars.add(v));
       nonRootBlocks.push(...theme);
     }
 
     for (const extCollection of extendedCollections) {
-      const { root, theme } = await processExtendedCollection(extCollection, groupSeparator, nameRegistry, nameOptions, appendPxToUnscoped);
+      const { root, theme } = await processExtendedCollection(extCollection, groupSeparator, nameRegistry, nameOptions, unitOptions, appendPxToUnscoped);
       root.forEach(v => rootVars.add(v));
       nonRootBlocks.push(...theme);
     }
