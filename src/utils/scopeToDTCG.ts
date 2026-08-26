@@ -28,6 +28,10 @@ const SCOPE_TO_DTCG: Partial<Record<VariableScope, { type: string; dimension: bo
 /**
  * The DTCG-predefined `fontWeight` keywords, exactly as the spec spells them.
  *
+ * Taken from the stable publication at
+ * https://www.designtokens.org/TR/2025.10/format/ — not the preview draft,
+ * which asks not to be implemented or cited as authoritative.
+ *
  * The spec's table is normative and case-sensitive, and we never rewrite a
  * variable's value to make it fit — so the match here is exact: no case folding
  * and no whitespace trimming. `"Bold"`, `"BOLD"` and `" bold"` are all values a

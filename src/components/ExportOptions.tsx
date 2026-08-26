@@ -29,8 +29,16 @@ interface ExportOptionsProps {
     onUseLegacyFormatChange?: (useLegacyFormat: boolean) => void;
 }
 
-/** The Design Tokens Community Group format spec the DTCG option follows. */
-const DTCG_SPEC_URL = "https://www.designtokens.org/TR/drafts/format/";
+/**
+ * The Design Tokens Community Group format spec the DTCG option follows.
+ *
+ * Deliberately the stable 2025.10 publication, not the preview draft at
+ * /TR/drafts/format/ — that one states "Do not attempt to implement this
+ * version of the specification. Do not reference this version as
+ * authoritative in any way." Both currently agree on the dimension,
+ * number and fontWeight shapes the exporter emits.
+ */
+const DTCG_SPEC_URL = "https://www.designtokens.org/TR/2025.10/format/";
 
 /**
  * Left inset that lines a footnote up with the label of the switch it belongs
