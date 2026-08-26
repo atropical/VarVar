@@ -5,14 +5,17 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 ## Features
 
 - **Multiple Export Formats**: Export Figma variables to JSON, CSV, CSS (vanilla or Tailwind CSS v4), or JavaScript
-- **JSON Import**: Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, choosing between four reconciliation modes and reviewing a dry-run diff before anything is written — see below. CSV/CSS/JS import isn't supported, since those formats aren't reliable round-trip sources.
+- **JSON Import**: Re-populate collections, modes, variables, and linked-variable references from a previously exported JSON file, choosing between four reconciliation modes and reviewing a dry-run diff before anything is written; `rem`/`em` values are converted back using a root font size you supply — see below. CSV/CSS/JS import isn't supported, since those formats aren't reliable round-trip sources.
 - **Format-Specific Menu Commands**: Direct access to each export format from the Figma menu
 - **Linked Variable Support**: Identifies and properly handles linked variables across formats
 - **Scope-Aware Types**: JSON, CSV, and JS exports map variable scopes (`CORNER_RADIUS`, `FONT_WEIGHT`, `OPACITY`, etc.) to DTCG `$type`s instead of exporting bare numbers
+- **Unit Options**: CSS, Tailwind, and JSON exports choose the unit dimension values carry — none, `px`, or `rem` with a configurable root font size; CSV and JavaScript always emit bare numbers — see below
+- **DTCG-Compliant Dimensions**: JSON writes dimensions as the spec's `{ "value": 16, "unit": "px" }` object by default, with a toggle for the `"16px"` string earlier versions emitted
+- **Faithful Numbers**: every format emits the shortest decimal that round-trips back to the 32-bit float Figma actually stores, so a `732.8` exports as `732.8` rather than `732.7999877929688`
 - **Scope-Driven Tailwind Naming (BETA)**: The Tailwind CSS export takes each variable's theme namespace and unit from its Figma scopes rather than guessing from its name — see below
 - **Code Syntax Support**: Figma's per-variable Code Syntax (Web, Android, iOS) is exported in JSON, CSV, and JS, and applied again on import; CSS and JS can optionally use the Web syntax as the emitted variable name
 - **Extended Collection Hierarchy Export (Enterprise, BETA)**: All export formats detect Enterprise extended collections and preserve the inheritance model instead of flattening it — see below
-- **Preview & Copy**: Preview exported data and easily copy to clipboard
+- **Preview & Copy**: Preview exported data — syntax-highlighted and legible in both Figma's light and dark themes — and easily copy to clipboard
 - **Automatic Downloads**: Exported files are automatically downloaded
 - **Row/Column Positioning**: CSV option for spreadsheet formula-like linking
 
@@ -38,12 +41,27 @@ The CSS export can emit a Tailwind CSS v4 `@theme` block instead of plain custom
 
 Two options shape the output:
 
-- **Join groups with a single dash** *(Tailwind only, on by default)*: Figma's `/` group delimiter becomes a single `-`, so `color/brand/500` exports as `--color-brand-500`. Tailwind IntelliSense only suggests theme variables written that way, so it can complete them in `@apply` and `class=""`; turn the option off for the previous `--color-brand--500`. Dashes you typed into the Figma name yourself are always preserved, and plain (non-Tailwind) CSS still joins groups with `--`.
-- **Append `px` to unscoped numeric values** *(CSS and Tailwind, off by default)*: number variables left on Figma's default scoping export as bare numbers; turn this on to give them a `px` unit instead. Variables explicitly scoped to something that isn't a dimension — font weight, opacity — stay unitless either way.
+- **Join groups with a single dash** *(both CSS outputs; on for Tailwind, off for plain CSS until you set it yourself)*: Figma's `/` group delimiter becomes a single `-`, so `color/brand/500` exports as `--color-brand-500`. Tailwind IntelliSense only suggests theme variables written that way, so it can complete them in `@apply` and `class=""`; turn the option off for `--color-brand--500`. Dashes you typed into the Figma name yourself are always preserved, so a variable named `text/h1--line-height` exports as `--text-h1--line-height` — which is also why the switch is offered for vanilla CSS, where it makes the output paste straight into a Tailwind `@theme` block.
+- **Unit for numeric values** and **Apply the unit to unscoped numeric values**: shared with the plain CSS output, and described under [Units and Numeric Values](#units-and-numeric-values).
 
 If two different Figma variable names produce the same CSS variable name, only one declaration survives; the collisions are listed in a comment at the top of the output.
 
 Tailwind export is flagged BETA in the plugin, and this naming behaviour may still shift — **we'd love your feedback**: [open an issue](https://github.com/atropical/varvar/issues) if a variable lands in the wrong namespace.
+
+### Units and Numeric Values
+
+Number variables that Figma scopes as dimensions — spacing, corner radius, font size, letter spacing, and so on — are exported with a unit. Two options decide which unit, and which variables get one:
+
+- **Unit for numeric values** *(CSS, Tailwind, and JSON; `px` by default)*: choose `px`, `rem`, or **None (bare number)**. `rem` reveals a **root font size** field (16 by default) that the Figma number is divided by, so a `32` exports as `2rem`; an empty or invalid entry falls back to 16. Only these units are offered: `px` and `rem` are the two a DTCG `dimension` can express, and relative units (`em`, `%`, `vw`, …) depend on a context the export can't see. **CSV and JavaScript are unaffected** — a CSV cell and a JS value have always been bare numbers, and still are.
+- **Apply the unit to unscoped numeric values** *(CSS, Tailwind, and JSON; off by default)*: number variables left on Figma's default scoping (no scopes, or all of them) export as bare numbers. Turn this on and they're treated as dimensions too, taking whichever unit is selected above. Variables explicitly scoped to something that isn't a dimension — font weight, opacity — stay unitless either way.
+
+For JSON there is one more:
+
+- **DTCG-compliant values** *(JSON only, on by default)*: the Design Tokens spec requires a dimension to be an object, so `16px` is written as `{ "value": 16, "unit": "px" }`. Turn it off to get the `"16px"` string earlier versions of the plugin emitted, for tooling built against that. Values with no unit are bare numbers either way, and each token's `$type` always agrees with the shape beside it: a value exported with a unit is a `dimension`, one without is a `number`.
+
+The unit options don't apply to the legacy (v2.x) JSON shape, which predates them and always emits bare numbers; they're hidden while that toggle is on.
+
+Across every format, numbers are emitted as the shortest decimal that round-trips back to the 32-bit float Figma stores. A `732.8` typed in Figma exports as `732.8` instead of `732.7999877929688`, and values that genuinely need more digits keep them.
 
 ### Code Syntax
 
@@ -82,11 +100,15 @@ Access format-specific exports directly from the Figma menu:
 1. Open your Figma file containing variables
 2. Go to **Plugins** → **VarVar** → Choose your format:
    - **Export as JSON** - Structured JSON data with nested groups
-   - **Export as JavaScript** - JavaScript objects with proper references
-   - **Export as CSV** - Spreadsheet-compatible data
+     - *Unit for numeric values* - `px` (default), `rem` with a root font size, or none
+     - *Apply the unit to unscoped numeric values* - opt-in unit for numbers left on Figma's default scoping
+     - *DTCG-compliant values* - on by default; off restores the `"16px"` string
+   - **Export as JavaScript** - JavaScript objects with proper references (always bare numbers)
+   - **Export as CSV** - Spreadsheet-compatible data (always bare numbers)
    - **Export as CSS & Tailwind** - CSS custom properties for web development
-     - *Tailwind CSS or vanilla* - Tailwind CSS format with `@theme` directive (BETA), with its own group-separator option
-     - *Append `px` to unscoped numeric values* - opt-in unit for numbers left on Figma's default scoping
+     - *Tailwind CSS or vanilla* - Tailwind CSS format with `@theme` directive (BETA)
+     - *Join groups with a single dash* - available for both CSS outputs
+     - *Unit for numeric values* and *Apply the unit to unscoped numeric values* - as for JSON
      - *Use Web code syntax as variable name* - also available for JavaScript
 3. Configure filename and options (if applicable)
 4. Click "Export Variables"
@@ -121,7 +143,10 @@ For format selection within the interface:
    - **Merge and delete anything not in the file** — merges, then deletes any variable, mode, or whole collection the file doesn't mention. Matches are updated in place, so their component links survive.
    - **Clean import** — deletes *every* existing local variable collection first, not just the ones named in the JSON, then imports fresh. Every component link is broken, even for variables that match the file exactly.
 5. Click **Preview import** for a dry-run diff of exactly what would be created, updated, deleted, or left unchanged, down to per-mode values and code syntax, without writing anything
-6. Click **Confirm import** to apply it (the two deleting modes ask you to confirm first). Collections, modes, variables, and linked-variable references are recreated, and a summary of what was created/updated (plus any warnings) is shown
+6. If the file carries `rem` or `em` values, which Figma has no equivalent for, a **root font size** field appears. Every such value is multiplied by it — with 16, `2rem` becomes `32` — and the diff re-runs as you change it, so what you see is what would be written
+7. Click **Confirm import** to apply it (the two deleting modes ask you to confirm first). Collections, modes, variables, and linked-variable references are recreated, and a summary of what was created/updated (plus any warnings) is shown
+
+> **Note:** Import reads dimensions in both spellings — the DTCG `{ "value": 16, "unit": "px" }` object and the older `"16px"` string — even mixed within one file. A unit that can't be reversed into a Figma number (`pt`, `%`, `vh`, …) has its suffix stripped and the number imported as-is, with a warning naming the value.
 
 > **Note:** Only JSON is supported for import — CSV, CSS, and JS aren't reliable round-trip sources for reconstructing variables.
 
@@ -176,6 +201,8 @@ src/
 │   ├── importJSON.ts       # Parses exported JSON and recreates variables in Figma
 │   ├── clipboard.ts
 │   ├── color.ts
+│   ├── numberFormat.ts     # Shortest decimals that round-trip through Figma's float32
+│   ├── units.ts            # Export unit choice, rem conversion, unit parsing on import
 │   └── stringTransformation.ts
 ├── types.d.ts          # TypeScript definitions and enums
 ├── code.ts             # Plugin main logic
