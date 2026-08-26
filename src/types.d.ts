@@ -105,6 +105,10 @@ export enum MessageTypes {
   EXPORT_SUCCESS_RESULT = "EXPORT.SUCCESS.RESULT",
   EXPORT_ERROR = "EXPORT.ERROR",
 
+  // UI messages
+  /** UI → sandbox: open a URL in the user's browser via `figma.openExternal`. */
+  OPEN_EXTERNAL = "UI.OPEN_EXTERNAL",
+
   // Import messages
   IMPORT_PREVIEW_REQUEST = "IMPORT.PREVIEW.REQUEST",
   IMPORT_PREVIEW_RESULT = "IMPORT.PREVIEW.RESULT",
@@ -257,4 +261,6 @@ export interface PluginMessage {
   importMode?: ImportMode;
   importSummary?: ImportSummary;
   importDiff?: ImportDiff;
+  /** Target of an {@link MessageTypes.OPEN_EXTERNAL} request. */
+  url?: string;
 }

@@ -194,6 +194,16 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             }
             break;
 
+        case MessageTypes.OPEN_EXTERNAL:
+            // The UI iframe can't navigate the browser itself, so links post the
+            // URL here and the sandbox opens it.
+            if (msg.url && /^https?:\/\//i.test(msg.url)) {
+                figma.openExternal(msg.url);
+            } else {
+                console.error('Open-external request missing a valid http(s) URL');
+            }
+            break;
+
         case MessageTypes.IMPORT_PREVIEW_REQUEST:
             if (msg.importFiles && msg.importFiles.length > 0) {
                 await handleImportPreview(msg.importFiles, msg.importMode || ImportMode.MERGE, msg.rootFontSize || DEFAULT_ROOT_FONT_SIZE);

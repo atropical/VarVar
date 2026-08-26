@@ -139,7 +139,7 @@ async function processCollection({
             obj[groupName] = obj[groupName] || {};
             obj = obj[groupName];
           });
-          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options));
+          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options), value);
           obj.$description = description || '';
           obj.$extensions = { figma: { scopes, resolvedType, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
@@ -194,7 +194,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
             obj[groupName] = obj[groupName] || {};
             obj = obj[groupName];
           });
-          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options));
+          obj.$type = resolveEmittedType(scopes, resolvedType, isUnitizedValue(resolvedType, scopes, options), overrideValue);
           obj.$description = description || '';
           obj.$extensions = { figma: { scopes, resolvedType, inherited: isInherited, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
