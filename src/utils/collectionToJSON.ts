@@ -45,15 +45,21 @@ function formatLeafValue(
  * escaping here, so the emitted format stays byte-compatible with every
  * version of the exporter.
  *
+ * The target collection is always named in full, including when it is the same
+ * collection the alias lives in. A same-collection short form ("$..Mode.path")
+ * would be shorter but not self-describing: mode names like Figma's default
+ * "Mode 1" recur across collections, so a reference that omits the collection
+ * can only be read by tracking the enclosing file entry. Import understands
+ * both forms, but every released exporter has emitted the qualified one, so
+ * that is what downstream consumers are handed.
+ *
  * @param alias - The variable alias to resolve
  * @param modeName - The mode name in the referencing collection
- * @param currentCollectionName - The name of the collection containing the alias
  * @returns The resolved alias path, or "_unlinked" if the target no longer exists
  */
 async function resolveAliasValue(
   alias: VariableAlias,
-  modeName: string,
-  currentCollectionName: string
+  modeName: string
 ): Promise<string> {
   const linkedVar = await figma.variables.getVariableByIdAsync(alias.id);
   if (!linkedVar) {
@@ -61,11 +67,7 @@ async function resolveAliasValue(
   }
 
   const linkedVarCollection = await figma.variables.getVariableCollectionByIdAsync(linkedVar.variableCollectionId);
-  let collName = '$.';
-
-  if (linkedVarCollection && currentCollectionName !== linkedVarCollection.name) {
-    collName = `$.${linkedVarCollection.name}`;
-  }
+  const collName = linkedVarCollection ? `$.${linkedVarCollection.name}` : '$.';
   const matchedModeName = linkedVarCollection
     ? getMatchingModeName(modeName, linkedVarCollection)
     : modeName;
@@ -107,7 +109,7 @@ async function processCollection({
           obj.$extensions = { figma: { scopes, resolvedType, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
           if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
-            obj.$value = await resolveAliasValue(value, mode.name, name);
+            obj.$value = await resolveAliasValue(value, mode.name);
           }
           else {
             obj.$value = formatLeafValue(value, resolvedType, scopes);
@@ -166,7 +168,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
             obj.$value = `$.${parentCollName}.${parentModeName}.${varName.replace(/\//g, ".")}`;
           }
           else if (typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS') {
-            obj.$value = await resolveAliasValue(overrideValue, mode.name, name);
+            obj.$value = await resolveAliasValue(overrideValue, mode.name);
           }
           else {
             obj.$value = formatLeafValue(overrideValue, resolvedType, scopes);
