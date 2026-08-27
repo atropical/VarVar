@@ -2,9 +2,8 @@ import React from "react";
 import { OutputFormats } from "../types.d";
 import { PluginDialogShell } from "../components/PluginDialogShell";
 import { ExportHeader } from "../components/ExportHeader";
-import { FilenameInput } from "../components/FilenameInput";
 import { ExportOptions } from "../components/ExportOptions";
-import { ExportButton } from "../components/ExportButton";
+import { ExportActions } from "../components/ExportActions";
 import { OutputPreview } from "../components/OutputPreview";
 import { ExportLayout } from "../components/ExportLayout";
 import { useExportData } from "../hooks/useExportData";
@@ -63,21 +62,20 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
                 onAppendPxToUnscopedChange={setAppendPxToUnscoped}
                 onDtcgCompliantValuesChange={setDtcgCompliantValues}
             />
-
-            <FilenameInput 
-                format={format}
-                filename={filename}
-                onFilenameChange={setFilename}
-            />
-
-            <ExportButton 
-                variablesCount={variablesCount}
-                hasExportedData={!!exportedData}
-                showPreview={seeOutput}
-                onExport={handleExport}
-                onDownload={handleDownload}
-            />
         </>
+    );
+
+    const actions = (
+        <ExportActions
+            format={format}
+            filename={filename}
+            onFilenameChange={setFilename}
+            variablesCount={variablesCount}
+            hasExportedData={!!exportedData}
+            showPreview={seeOutput}
+            onExport={handleExport}
+            onDownload={handleDownload}
+        />
     );
 
     const preview = seeOutput && exportedData ? (
@@ -97,6 +95,7 @@ export const ExportJSON: React.FC<ExportJSONProps> = ({ editorType = "" }) => {
                 editorType={editorType}
                 children={formControls}
                 preview={preview}
+                actions={actions}
             />
         </PluginDialogShell>
     );
