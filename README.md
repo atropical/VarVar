@@ -14,6 +14,7 @@ VarVar is a Figma plugin that allows you to export your Figma variables to JSON,
 - **Faithful Numbers**: every format emits the shortest decimal that round-trips back to the 32-bit float Figma actually stores, so a `732.8` exports as `732.8` rather than `732.7999877929688`
 - **Scope-Driven Tailwind Naming (BETA)**: The Tailwind CSS export takes each variable's theme namespace and unit from its Figma scopes rather than guessing from its name — see below
 - **Code Syntax Support**: Figma's per-variable Code Syntax (Web, Android, iOS) is exported in JSON, CSV, and JS, and applied again on import; CSS and JS can optionally use the Web syntax as the emitted variable name
+- **Style Composer (BETA)**: Browse every local colour, text, effect, and grid style, bind or swap the variables behind each field, preview the result exactly as Figma renders it in any mode, generate new styles from token groups, and apply it all after a dry-run review — see below
 - **Extended Collection Hierarchy Export (Enterprise, BETA)**: All export formats detect Enterprise extended collections and preserve the inheritance model instead of flattening it — see below
 - **Preview & Copy**: Preview exported data — syntax-highlighted and legible in both Figma's light and dark themes — and easily copy to clipboard
 - **Automatic Downloads**: Exported files are automatically downloaded
@@ -92,6 +93,21 @@ Figma's Enterprise-only [extended collections](https://help.figma.com/hc/en-us/a
 - **JSON only:** output splits into `base.tokens.json` (all non-extended collections) plus one file per extended collection, bundled into a single `.zip` download. CSS, CSV, and JS stay single-file, representing inheritance inline.
 
 This only activates when extended collections are present in the file — accounts without Enterprise extended collections see no change to their exports. This feature is new and we haven't been able to validate it against a real Enterprise file ourselves, so **we'd love your feedback**: [open an issue](https://github.com/atropical/varvar/issues) if the output doesn't look right.
+
+### 🧪 Style Composer (BETA)
+
+**Plugins** → **VarVar** → **Compose Styles… (BETA)** opens a three-column editor: your styles on the left, the selected style in the middle, and its preview on the right.
+
+- **Every bindable field, all four style kinds**: fill and gradient-stop colours; font family, style, weight, size, line height, letter spacing, paragraph spacing and indent; drop/inner shadow colour, offset, blur and spread, and blur radius; grid count, gutter, margin and size. Layers can be added, removed, reordered, and hidden, and grid colours edited; layers Figma can't bind (images, noise, glass, shaders) are kept untouched.
+- **Token picker**: only variables of the right type are listed — those scoped for the field first, unscoped ones next, and those scoped for something else on request. Local, extended-collection, and enabled-library variables are all offered; a library variable is imported into the file when the change is applied. **Detach** keeps the value the token resolved to, as Figma does.
+- **Preview**: an *instant* CSS preview that follows every keystroke, and an *exact* render Figma produces for the draft (via a temporary, locked, off-canvas frame that is removed when the plugin closes). A mode switcher shows the style in any mode of the collections it uses, extended collections included. Grids are drawn by the plugin, since Figma never exports layout grids. The instant preview says when it's approximate (fonts not installed locally, blend modes CSS lacks, image fills, etc.).
+- **Usage**: the selected style's layer count comes from Figma's own consumer lookup, shown as `999+` past that; on a large file you can stop waiting.
+- **Reorder styles**: move the selected style up or down within its folder; the new order is applied with everything else.
+- **Swap tokens**: tick several styles and move every binding from one name prefix to another — `color/brand/` → `color/accent/` — or one token to another.
+- **Generate from tokens**: pick what to make (colour styles, typography, shadows, layout grids) and a token group. Each sub-group becomes a style, the field each token fills is guessed from its scopes and then its name (`size`, `lh`, `blur`, `gutter`, …), and your corrections are remembered in the file. Or pick a **DTCG token file** as the source: every `typography` token becomes a text style and every `shadow` token (single or layered, `inset` included) an effect style; sub-values that reference a token (`{color.shadow}`, or VarVar's `$.Collection.Mode.path`) are bound to the variable of that name, and literals are written as they are (`rem`/`em` via a root font size you set).
+- **Review and apply**: nothing touches the document until you review the itemised diff and apply it. One apply is one Figma undo step; a missing font or deleted variable skips that field or style with a warning instead of failing the run.
+
+Styles can only be changed in the design editor; in Dev Mode the composer is read-only. It needs the `teamlibrary` permission to list library variables.
 
 ## Installation
 
@@ -193,17 +209,20 @@ src/
 │   ├── ImportDiffPreview.tsx  # Dry-run diff shown before an import is applied
 │   ├── ImportSummaryPanel.tsx # Import result counts and warnings
 │   ├── HelpTip.tsx            # "?" badge with a figma-kit tooltip
-│   └── Footer.tsx
+│   ├── Footer.tsx
+│   └── composer/              # Style Composer: list, editor, field rows, token picker, preview, review, generator, swap
 ├── hooks/              # Custom React hooks
 │   ├── useExportData.ts    # Hook for managing export data and state
-│   └── useImportData.ts    # Hook for managing import data and state
+│   ├── useImportData.ts    # Hook for managing import data and state
+│   └── useComposer.ts      # Style Composer state, previews and apply round trip
 ├── views/              # Format-specific export/import views
 │   ├── ExportView.tsx      # Generic export with format selector
 │   ├── ExportJSON.tsx
 │   ├── ExportCSV.tsx
 │   ├── ExportCSS.tsx
 │   ├── ExportJS.tsx
-│   └── ImportJSON.tsx      # JSON import view
+│   ├── ImportJSON.tsx      # JSON import view
+│   └── StyleComposer.tsx   # Style Composer view
 ├── utils/              # Export/import processing utilities
 │   ├── collectionToJSON.ts
 │   ├── collectionToCSV.ts
@@ -217,6 +236,17 @@ src/
 │   ├── numberFormat.ts     # Shortest decimals that round-trip through Figma's float32
 │   ├── units.ts            # Export unit choice, rem conversion, unit parsing on import
 │   └── stringTransformation.ts
+├── composer/           # Style Composer model (shared) and sandbox side
+│   ├── types.ts            # Draft, catalogue and message types
+│   ├── fields.ts           # Bindable fields, scopes and generator name guesses
+│   ├── model.ts            # Field addressing, token resolution per mode, defaults
+│   ├── ops.ts              # Diff, bulk swap, generator
+│   ├── composite.ts        # DTCG typography/shadow tokens → styles
+│   ├── css.ts              # Instant CSS previews
+│   ├── catalog.ts          # Variable catalogue (local, extended, library)
+│   ├── readStyles.ts / writeStyles.ts  # Read styles; write them with bindings
+│   ├── preview.ts          # Exact render through a temporary node
+│   └── handlers.ts         # Sandbox message handling
 ├── types.d.ts          # TypeScript definitions and enums
 ├── code.ts             # Plugin main logic
 └── ui.tsx              # UI router and main app
