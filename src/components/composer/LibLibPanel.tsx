@@ -50,19 +50,6 @@ export const LibLibPanel: React.FC<LibLibPanelProps> = ({ existing, variables, o
                     Add to drafts
                 </Button>
             </Flex>
-            <Flex direction="column" gap="1" style={panel}>
-                <Text weight="strong">What is LibLib?</Text>
-                <Text style={muted}>
-                    <ExternalLink href={LIBLIB_PLUGIN_URL}>LibLib</ExternalLink> is a companion Figma plugin that exports a design system —
-                    every component, style and variable — as a deterministic snapshot you commit to your repo, so <code>git diff</code> becomes its
-                    changelog and agents can read it. Together they close the loop: export a snapshot with LibLib, edit its styles (by hand or
-                    with an agent), apply it here, then run LibLib's diff to confirm the file matches.
-                </Text>
-                <Text style={{ ...muted, fontSize: 11 }}>
-                    In LibLib: run <strong>Export Library Snapshot…</strong> in the library file and choose <strong>JSON</strong>.{" "}
-                    <ExternalLink href={LIBLIB_REPO_URL}>Source and docs</ExternalLink>
-                </Text>
-            </Flex>
             <Text style={muted}>
                 Pick a library snapshot exported by LibLib as JSON. Each style record updates the style with the same key — renaming it if
                 its name changed — or creates a new one, and its variables are bound again by name. Everything lands in your drafts for review.
@@ -76,6 +63,27 @@ export const LibLibPanel: React.FC<LibLibPanelProps> = ({ existing, variables, o
                 onFilesSelected={(names, contents) => { setFileNames(names.slice(0, 1)); setText(contents[0] ?? null); }}
             />
 
+            <Flex
+                direction="column"
+                gap="1"
+                style={{
+                    ...panel,
+                    borderColor: "var(--figma-color-border-brand)",
+                    background: "var(--figma-color-bg-brand-tertiary)",
+                }}
+            >
+                <Text weight="strong">What is LibLib?</Text>
+                <Text style={muted}>
+                    <ExternalLink href={LIBLIB_PLUGIN_URL}>LibLib</ExternalLink> is a companion Figma plugin that exports a design system —
+                    every component, style and variable — as a deterministic snapshot you commit to your repo, so <code>git diff</code> becomes its
+                    changelog and agents can read it. Together they close the loop: export a snapshot with LibLib, edit its styles (by hand or
+                    with an agent), apply it here, then run LibLib's diff to confirm the file matches.
+                </Text>
+                <Text style={{ ...muted, fontSize: 11 }}>
+                    In LibLib: run <strong>Export Library Snapshot…</strong> in the library file and choose <strong>JSON</strong>.{" "}
+                    <ExternalLink href={LIBLIB_REPO_URL}>Source and docs</ExternalLink>
+                </Text>
+            </Flex>
             {result && "error" in result && <ErrorBox>{result.error}</ErrorBox>}
 
             {plan && (
