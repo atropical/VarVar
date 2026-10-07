@@ -54,7 +54,7 @@ export const StyleComposer: React.FC = () => {
     const allDrafts = c.order.map((k) => c.drafts.get(k)).filter((d): d is StyleDraft => !!d);
 
     return (
-        <Flex direction="column" gap="3" style={{ padding: "0.75rem 1rem", height: "100vh", boxSizing: "border-box" }}>
+        <Flex direction="column" gap="3" style={{ padding: "0.75rem 1rem", height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
             <Flex gap="2" align="center" style={{ flexWrap: "wrap" }}>
                 <Text size="large" weight="strong">Compose styles</Text>
                 <BetaBadge />
@@ -125,8 +125,9 @@ export const StyleComposer: React.FC = () => {
                 </ErrorBox>
             )}
 
-            <Flex gap="4" style={{ flex: 1, minHeight: 0 }}>
-                <Flex direction="column" style={{ width: 240, flexShrink: 0, minHeight: 0 }}>
+            {/* Each column scrolls on its own, so the list, editor and preview stay in view. */}
+            <Flex gap="4" style={{ flex: 1, minHeight: 0, alignItems: "stretch", overflow: "hidden" }}>
+                <Flex direction="column" style={{ width: 240, flexShrink: 0, minHeight: 0, height: "100%" }}>
                     <StyleList
                         order={c.order}
                         drafts={c.drafts}
@@ -182,7 +183,7 @@ export const StyleComposer: React.FC = () => {
                 {mode === "edit" && (
                     selected ? (
                         <>
-                            <div style={{ flex: 1, minWidth: 0, overflowY: "auto", paddingRight: 4 }}>
+                            <div style={{ flex: 1, minWidth: 0, height: "100%", overflowY: "auto", paddingRight: 4 }}>
                                 <StyleEditor
                                     draft={selected}
                                     isDeleted={c.deleted.has(selected.key)}
@@ -197,7 +198,16 @@ export const StyleComposer: React.FC = () => {
                                     onRevert={selected.id && c.dirtyKeys.has(selected.key) ? () => c.revert(selected.key) : undefined}
                                 />
                             </div>
-                            <div style={{ width: 300, flexShrink: 0, overflowY: "auto" }}>
+                            <div style={{
+                                width: 300,
+                                flexShrink: 0,
+                                height: "100%",
+                                overflowY: "auto",
+                                boxSizing: "border-box",
+                                padding: 12,
+                                borderRadius: 8,
+                                background: "var(--figma-color-bg-secondary)",
+                            }}>
                                 <StylePreview
                                     draft={selected}
                                     index={c.index}

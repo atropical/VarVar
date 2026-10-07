@@ -64,7 +64,7 @@ export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, di
     const allVisibleChecked = visible.length > 0 && visible.every((d) => checked.has(d.key));
 
     return (
-        <Flex direction="column" gap="2" style={{ minHeight: 0, flex: 1 }}>
+        <Flex direction="column" gap="2" style={{ minHeight: 0, flex: 1, height: "100%", overflow: "hidden" }}>
             <Input placeholder="Search styles" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search styles" />
             <Flex gap="1" style={{ flexWrap: "wrap" }}>
                 {STYLE_KINDS.map((k) => {
@@ -79,7 +79,7 @@ export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, di
                                 setKinds(next);
                             }}
                             style={{
-                                all: "unset", cursor: "pointer", padding: "1px 8px", borderRadius: 12, fontSize: 11,
+                                all: "unset", fontFamily: "var(--font-family-default)", cursor: "pointer", padding: "1px 8px", borderRadius: 12, fontSize: 11,
                                 border: `1px solid ${active ? "transparent" : "var(--figma-color-border)"}`,
                                 background: active ? "var(--figma-color-bg-selected)" : "transparent",
                                 color: active ? "var(--figma-color-text)" : "var(--figma-color-text-secondary)",

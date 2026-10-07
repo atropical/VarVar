@@ -7,7 +7,7 @@ import {
 import type { CatalogVariable, ModeSelection, StyleDraft } from "../../composer/types";
 import { STYLE_KIND_LABELS } from "../../composer/types";
 import { FieldRow, RawEditor } from "./FieldRow";
-import { OptionSelect, iconButton, muted, panel } from "./ui";
+import { Check, OptionSelect, iconButton, muted, panel } from "./ui";
 
 interface StyleEditorProps {
     draft: StyleDraft;
@@ -179,6 +179,51 @@ export const StyleEditor: React.FC<StyleEditorProps> = ({
                             onChange={(textDecoration) => onChange({ ...draft, text: { ...draft.text!, textDecoration } })}
                         />
                     </Flex>
+                    <Flex gap="2" align="center" style={{ flexWrap: "wrap" }}>
+                        <Text style={muted}>Leading trim</Text>
+                        <OptionSelect
+                            label="Leading trim"
+                            width={130}
+                            disabled={disabled}
+                            value={draft.text.leadingTrim}
+                            options={[{ value: "NONE", label: "None" }, { value: "CAP_HEIGHT", label: "Cap height" }]}
+                            onChange={(leadingTrim) => onChange({ ...draft, text: { ...draft.text!, leadingTrim } })}
+                        />
+                        <Text style={muted}>List spacing</Text>
+                        <Input
+                            type="number"
+                            min="0"
+                            disabled={disabled}
+                            style={{ width: 64 }}
+                            aria-label="List spacing"
+                            value={String(draft.text.listSpacing)}
+                            onChange={(e) => {
+                                const n = Number(e.target.value);
+                                if (e.target.value.trim() !== "" && Number.isFinite(n)) onChange({ ...draft, text: { ...draft.text!, listSpacing: n } });
+                            }}
+                        />
+                    </Flex>
+                    <Flex gap="3" align="center" style={{ flexWrap: "wrap" }}>
+                        <Flex gap="1" align="center">
+                            <Check
+                                label="Hanging punctuation"
+                                checked={draft.text.hangingPunctuation}
+                                onChange={(hangingPunctuation) => !disabled && onChange({ ...draft, text: { ...draft.text!, hangingPunctuation } })}
+                            />
+                            <Text>Hanging punctuation</Text>
+                        </Flex>
+                        <Flex gap="1" align="center">
+                            <Check
+                                label="Hanging list"
+                                checked={draft.text.hangingList}
+                                onChange={(hangingList) => !disabled && onChange({ ...draft, text: { ...draft.text!, hangingList } })}
+                            />
+                            <Text>Hanging list markers</Text>
+                        </Flex>
+                    </Flex>
+                    <Text style={{ ...muted, fontSize: 11 }}>
+                        OpenType features (tabular numbers, ligatures…) and underline style can't be set by plugins — Figma doesn't expose them on text styles.
+                    </Text>
                     {draft.text.boundVariables.lineHeight && <Text style={{ ...muted, fontSize: 11 }}>A bound line height is always in pixels.</Text>}
                 </Flex>
             )}
