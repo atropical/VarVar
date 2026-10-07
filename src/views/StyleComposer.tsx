@@ -54,7 +54,15 @@ export const StyleComposer: React.FC = () => {
     const allDrafts = c.order.map((k) => c.drafts.get(k)).filter((d): d is StyleDraft => !!d);
 
     return (
-        <Flex direction="column" gap="3" style={{ padding: "0.75rem 1rem", height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
+        <Flex direction="column" gap="3" style={{
+            padding: "0.75rem 1rem",
+            // `#root > *` gets flex: 1, which would let the view grow with its
+            // content; pin it to the window so each column scrolls on its own.
+            flex: "none",
+            height: "100vh",
+            boxSizing: "border-box",
+            overflow: "hidden",
+        }}>
             <Flex gap="2" align="center" style={{ flexWrap: "wrap" }}>
                 <Text size="large" weight="strong">Compose styles</Text>
                 <BetaBadge />
