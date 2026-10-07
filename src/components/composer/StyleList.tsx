@@ -79,7 +79,7 @@ export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, di
                                 setKinds(next);
                             }}
                             style={{
-                                all: "unset", fontFamily: "var(--font-family-default)", cursor: "pointer", padding: "1px 8px", borderRadius: 12, fontSize: 11,
+                                all: "unset", fontFamily: "inherit", cursor: "pointer", padding: "1px 8px", borderRadius: 12, fontSize: 11,
                                 border: `1px solid ${active ? "transparent" : "var(--figma-color-border)"}`,
                                 background: active ? "var(--figma-color-bg-selected)" : "transparent",
                                 color: active ? "var(--figma-color-text)" : "var(--figma-color-text-secondary)",

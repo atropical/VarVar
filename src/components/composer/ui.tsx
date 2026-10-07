@@ -12,7 +12,7 @@ export const panel: React.CSSProperties = {
 };
 
 export const iconButton: React.CSSProperties = {
-    all: "unset", fontFamily: "var(--font-family-default)",
+    all: "unset", fontFamily: "inherit",
     cursor: "pointer",
     padding: "0 6px",
     borderRadius: 4,

@@ -60,6 +60,8 @@ export const StyleComposer: React.FC = () => {
             // content; pin it to the window so each column scrolls on its own.
             flex: "none",
             height: "100vh",
+            // Native elements (summary, buttons, datalists) don't get figma-kit's font on their own.
+            fontFamily: "var(--font-family-default)",
             boxSizing: "border-box",
             overflow: "hidden",
         }}>

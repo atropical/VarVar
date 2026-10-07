@@ -79,7 +79,7 @@ export const TokenPicker: React.FC<TokenPickerProps> = ({ spec, variables, index
                         type="button"
                         onClick={() => onPick(v.id)}
                         style={{
-                            all: "unset", fontFamily: "var(--font-family-default)",
+                            all: "unset", fontFamily: "inherit",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
