@@ -45,6 +45,11 @@ const TEXT_EXTRAS: (keyof NonNullable<StyleDraft["text"]>)[] = [
     "textCase", "textDecoration", "leadingTrim", "listSpacing", "hangingPunctuation", "hangingList",
 ];
 
+const TEXT_EXTRA_LABELS: Record<string, string> = {
+    textCase: "Case", textDecoration: "Decoration", leadingTrim: "Leading trim", listSpacing: "List spacing",
+    hangingPunctuation: "Hanging punctuation", hangingList: "Hanging list markers",
+};
+
 /** What changes between a style as stored and its draft, as readable lines. */
 export const diffDraft = (before: StyleDraft | undefined, after: StyleDraft, index: CatalogIndex): StyleChange | null => {
     const lines: string[] = [];
@@ -64,7 +69,7 @@ export const diffDraft = (before: StyleDraft | undefined, after: StyleDraft, ind
     }
     if (before.text && after.text) {
         for (const k of TEXT_EXTRAS) {
-            if (JSON.stringify(before.text[k]) !== JSON.stringify(after.text[k])) lines.push(`${k}: ${String(before.text[k])} → ${String(after.text[k])}`);
+            if (JSON.stringify(before.text[k]) !== JSON.stringify(after.text[k])) lines.push(`${TEXT_EXTRA_LABELS[k]}: ${String(before.text[k])} → ${String(after.text[k])}`);
         }
         if (before.text.lineHeight.unit !== after.text.lineHeight.unit) lines.push(`Line height unit: ${before.text.lineHeight.unit} → ${after.text.lineHeight.unit}`);
         if (before.text.letterSpacing.unit !== after.text.letterSpacing.unit) lines.push(`Letter spacing unit: ${before.text.letterSpacing.unit} → ${after.text.letterSpacing.unit}`);
