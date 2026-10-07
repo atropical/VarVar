@@ -105,8 +105,17 @@ This only activates when extended collections are present in the file — accoun
 - **Reorder styles**: move the selected style up or down within its folder; the new order is applied with everything else.
 - **Swap tokens**: tick several styles and move every binding from one name prefix to another — `color/brand/` → `color/accent/` — or one token to another.
 - **Generate from tokens**: pick what to make (colour styles, typography, shadows, layout grids) and a token group. Each sub-group becomes a style, the field each token fills is guessed from its scopes and then its name (`size`, `lh`, `blur`, `gutter`, …), and your corrections are remembered in the file. Or pick a **DTCG token file** as the source: every `typography` token becomes a text style and every `shadow` token (single or layered, `inset` included) an effect style; sub-values that reference a token (`{color.shadow}`, or VarVar's `$.Collection.Mode.path`) are bound to the variable of that name, and literals are written as they are (`rem`/`em` via a root font size you set).
-- **Apply a LibLib snapshot**: [LibLib](https://github.com/atropical/liblib) exports a design system's styles as a committed, diffable snapshot. Pick a LibLib *library* snapshot (JSON) and each style record updates the style with the same key — renaming it when the name changed, so layers keep their link — or creates a new one, with its variables bound again by name. Optionally delete styles the snapshot doesn't include (off by default). Edit the snapshot (by hand or with an agent), apply it here, then run LibLib's diff to confirm the file matches. See [LibLib compatibility](#liblib-compatibility).
+- **Apply a LibLib snapshot**: [LibLib](https://www.figma.com/community/plugin/1665168884798434636) exports a design system's styles as a committed, diffable snapshot. Pick a LibLib *library* snapshot (JSON) and each style record updates the style with the same key — renaming it when the name changed, so layers keep their link — or creates a new one, with its variables bound again by name. Optionally delete styles the snapshot doesn't include (off by default). Edit the snapshot (by hand or with an agent), apply it here, then run LibLib's diff to confirm the file matches. See [LibLib compatibility](#liblib-compatibility).
 - **Review and apply**: nothing touches the document until you review the itemised diff and apply it. One apply is one Figma undo step; a missing font or deleted variable skips that field or style with a warning instead of failing the run.
+
+#### Using VarVar with LibLib
+
+[LibLib](https://www.figma.com/community/plugin/1665168884798434636) ([source](https://github.com/atropical/liblib)) is a companion plugin from Atropical. It exports a design system — every component, style and variable — as a deterministic, diffable snapshot you commit next to your code, so `git diff` reads as the design system's changelog and agents can work from it. VarVar is the other half: it *writes* what a snapshot describes.
+
+1. In the library file, run **LibLib → Export Library Snapshot…** as **JSON** and commit it.
+2. Change the `styles[]` records — rename, rebind to other variables, add or remove styles — by hand or with an agent.
+3. Run **VarVar → Compose Styles… → Apply LibLib snapshot**, review the diff, and apply. Renamed styles keep every layer link, because records match on style key, not name.
+4. Run **LibLib → Diff Against Library Snapshot…** to confirm the file now matches.
 
 #### LibLib compatibility
 
