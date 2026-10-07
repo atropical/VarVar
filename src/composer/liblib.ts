@@ -11,8 +11,23 @@ import type { CatalogVariable, StyleDraft, StyleKind, TextProps } from "./types"
  * (`npx @atropical/liblib` can do that).
  */
 
-/** LibLib snapshot schemas this version of VarVar can apply. */
+/**
+ * LibLib snapshot schemas this version of VarVar can apply. Within @1, a
+ * record's optional `bindings` (collection-qualified, LibLib plugin 2.3.0+)
+ * is used when present; without it bindings fall back to names alone.
+ */
 export const SUPPORTED_LIBLIB_SCHEMAS = ["liblib/design-system-snapshot@1"] as const;
+
+/**
+ * Where a style binds a variable, keyed by its path inside `value`
+ * (e.g. "paints[0].boundVariables.color"). Added by LibLib without a schema
+ * bump, so it is feature-detected: older snapshots don't have it.
+ */
+interface StyleBinding {
+    name: string;
+    collection: string | null;
+    key: string | null;
+}
 
 interface StyleRecord {
     key?: string;
@@ -20,6 +35,7 @@ interface StyleRecord {
     type: StyleKind;
     description?: string;
     value: Record<string, unknown>;
+    bindings?: Record<string, StyleBinding>;
 }
 
 export interface LibLibPlan {
@@ -49,7 +65,22 @@ export const libLibStyleKey = (draft: StyleDraft): string | undefined => {
  * bare variable name; a `{ $var: "Collection/Name" }` object or a
  * `"{Collection/Name}"` string is accepted too, for when the collection is recorded.
  */
-const resolveBinding = (raw: unknown, variables: CatalogVariable[], where: string, warnings: string[]): VariableAlias | undefined => {
+const resolveBinding = (
+    raw: unknown,
+    variables: CatalogVariable[],
+    where: string,
+    warnings: string[],
+    hint?: StyleBinding,
+): VariableAlias | undefined => {
+    if (hint && !hint.name.startsWith("unresolved:")) {
+        // The variable's key identifies it exactly; collection + name is the next best.
+        const byKey = hint.key ? variables.find((v) => v.key === hint.key) : undefined;
+        if (byKey) return { type: "VARIABLE_ALIAS", id: byKey.id };
+        const byName = variables.filter((v) => v.name === hint.name && (hint.collection === null || v.collectionName === hint.collection));
+        if (byName.length > 0) return { type: "VARIABLE_ALIAS", id: (byName.find((v) => !v.unimported) ?? byName[0]).id };
+        warnings.push(`${where}: no variable "${hint.collection ? `${hint.collection}/` : ""}${hint.name}" in this file, so the field is left unbound.`);
+        return undefined;
+    }
     let ref: string | undefined;
     if (typeof raw === "string") ref = raw;
     else if (raw && typeof raw === "object" && typeof (raw as { $var?: unknown }).$var === "string") ref = (raw as { $var: string }).$var;
@@ -84,26 +115,39 @@ const resolveBinding = (raw: unknown, variables: CatalogVariable[], where: strin
     return { type: "VARIABLE_ALIAS", id: pick.id };
 };
 
-/** Walks a value and turns every `boundVariables` entry back into variable aliases. */
-const rebind = (value: unknown, variables: CatalogVariable[], where: string, warnings: string[]): unknown => {
-    if (Array.isArray(value)) return value.map((v, i) => rebind(v, variables, `${where} ${i + 1}`, warnings));
+interface RebindContext {
+    variables: CatalogVariable[];
+    warnings: string[];
+    bindings?: Record<string, StyleBinding>;
+}
+
+/**
+ * Walks a value and turns every `boundVariables` entry back into variable
+ * aliases. `path` follows LibLib's binding paths ("paints[0].boundVariables.color").
+ */
+const rebind = (value: unknown, ctx: RebindContext, where: string, path: string): unknown => {
+    if (Array.isArray(value)) return value.map((v, i) => rebind(v, ctx, `${where} ${i + 1}`, `${path}[${i}]`));
     if (!value || typeof value !== "object") return value;
+    const join = (key: string) => (path ? `${path}.${key}` : key);
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
         if (key === "boundVariables" && item && typeof item === "object") {
             const bound: Record<string, unknown> = {};
             for (const [field, raw] of Object.entries(item as Record<string, unknown>)) {
+                const fieldPath = `${join(key)}.${field}`;
                 if (Array.isArray(raw)) {
-                    const list = raw.map((r) => resolveBinding(r, variables, `${where} · ${field}`, warnings)).filter(Boolean);
+                    const list = raw
+                        .map((r, i) => resolveBinding(r, ctx.variables, `${where} · ${field}`, ctx.warnings, ctx.bindings?.[`${fieldPath}[${i}]`]))
+                        .filter(Boolean);
                     if (list.length) bound[field] = list;
                 } else {
-                    const alias = resolveBinding(raw, variables, `${where} · ${field}`, warnings);
+                    const alias = resolveBinding(raw, ctx.variables, `${where} · ${field}`, ctx.warnings, ctx.bindings?.[fieldPath]);
                     if (alias) bound[field] = alias;
                 }
             }
             out[key] = bound;
         } else {
-            out[key] = rebind(item, variables, where, warnings);
+            out[key] = rebind(item, ctx, where, join(key));
         }
     }
     return out;
@@ -178,7 +222,7 @@ export const planFromLibLib = (
             warnings.push(`Skipped a style record without a name or with an unknown type (${JSON.stringify(raw?.type)}).`);
             continue;
         }
-        const value = rebind(raw.value ?? {}, variables, raw.name, warnings) as Record<string, unknown>;
+        const value = rebind(raw.value ?? {}, { variables, warnings, bindings: raw.bindings }, raw.name, "") as Record<string, unknown>;
         const record = { ...raw, value };
         const match = raw.key ? byKey.get(raw.key) : undefined;
         if (match && match.kind !== raw.type) {

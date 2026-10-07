@@ -114,7 +114,9 @@ This only activates when extended collections are present in the file — accoun
 | --- | --- | --- |
 | 5.0.0 | `liblib/design-system-snapshot@1` | JSON |
 
-Any other schema — including LibLib *usage* snapshots — is refused with a message naming the supported one. TOON snapshots aren't read; export JSON from LibLib. Schema `@1` records a bound variable by name only, so when two collections share that name VarVar binds the first local match and warns in the review.
+Any other schema — including LibLib *usage* snapshots — is refused with a message naming the supported one. TOON snapshots aren't read; export JSON from LibLib.
+
+Within `@1`, style records exported by newer LibLib versions carry a `bindings` map naming each bound variable's collection and key; VarVar uses it whenever it is present, so bindings land on exactly the right variable. Snapshots without it record a bound variable by name only: when two collections share that name, VarVar binds the first local match and warns in the review.
 
 Styles can only be changed in the design editor; in Dev Mode the composer is read-only. It needs the `teamlibrary` permission to list library variables.
 
