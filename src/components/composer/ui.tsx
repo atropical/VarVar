@@ -84,7 +84,13 @@ export function OptionSelect<T extends string>({ value, options, onChange, disab
     return (
         <Select.Root value={value} onValueChange={(v) => onChange(v as T)} disabled={disabled}>
             <Select.Trigger aria-label={label} style={{ width, flexShrink: 0 }} />
-            <Select.Content portal position="popper" sideOffset={4}>
+            {/* Popper-positioned Radix content has no height limit of its own; cap it so long lists scroll. */}
+            <Select.Content
+                portal
+                position="popper"
+                sideOffset={4}
+                style={{ maxHeight: "min(320px, var(--radix-select-content-available-height))" }}
+            >
                 {options.map((o) => (
                     <Select.Item key={o.value} value={o.value}>{o.label}</Select.Item>
                 ))}
