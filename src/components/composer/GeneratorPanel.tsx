@@ -230,7 +230,14 @@ export const GeneratorPanel: React.FC<GeneratorPanelProps> = ({ variables, exist
                                 <Text weight="strong">{g.draft.name}</Text>
                             </Flex>
                             {g.bound.map((b) => <Text key={b} style={{ fontSize: 11, fontFamily: "monospace", marginLeft: 8 }}>{b}</Text>)}
-                            {g.warnings.map((w) => <Text key={w} style={{ fontSize: 11, marginLeft: 8, color: "var(--figma-color-text-warning, #b45309)" }}>{w}</Text>)}
+                            {g.warnings.length > 0 && (
+                                <details style={{ marginLeft: 8 }}>
+                                    <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--figma-color-text-warning, #b45309)" }}>
+                                        {g.warnings.length} token{g.warnings.length === 1 ? "" : "s"} skipped
+                                    </summary>
+                                    {g.warnings.map((w) => <Text key={w} style={{ display: "block", fontSize: 11, color: "var(--figma-color-text-warning, #b45309)" }}>{w}</Text>)}
+                                </details>
+                            )}
                         </Flex>
                     ))}
                 </Flex>
