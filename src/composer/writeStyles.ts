@@ -104,7 +104,7 @@ async function allResolvedValues(variable: Variable, depth = 0): Promise<Variabl
 
 let availableFonts: Font[] | null = null;
 const fontsOfFamily = async (family: string): Promise<FontName[]> => {
-    availableFonts ??= await figma.listAvailableFontsAsync();
+    if (!availableFonts) availableFonts = await figma.listAvailableFontsAsync();
     return availableFonts.filter((f) => f.fontName.family === family).map((f) => f.fontName);
 };
 
@@ -124,7 +124,9 @@ async function loadFontsFor(text: TextProps, ctx: WriteContext, label: string): 
     const families = new Set<string>([text.fontName.family]);
     const familyVar = await variableFor(text.boundVariables.fontFamily, ctx);
     if (familyVar) {
-        for (const value of await allResolvedValues(familyVar)) if (typeof value === "string") families.add(value);
+        // Awaited first: Figma's QuickJS sandbox fails to load code with `for (… of await …)`.
+        const values = await allResolvedValues(familyVar);
+        for (const value of values) if (typeof value === "string") families.add(value);
     }
     const fontBound = familyVar || text.boundVariables.fontStyle || text.boundVariables.fontWeight;
     if (!fontBound) return true;
