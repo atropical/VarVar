@@ -105,7 +105,16 @@ This only activates when extended collections are present in the file — accoun
 - **Reorder styles**: move the selected style up or down within its folder; the new order is applied with everything else.
 - **Swap tokens**: tick several styles and move every binding from one name prefix to another — `color/brand/` → `color/accent/` — or one token to another.
 - **Generate from tokens**: pick what to make (colour styles, typography, shadows, layout grids) and a token group. Each sub-group becomes a style, the field each token fills is guessed from its scopes and then its name (`size`, `lh`, `blur`, `gutter`, …), and your corrections are remembered in the file. Or pick a **DTCG token file** as the source: every `typography` token becomes a text style and every `shadow` token (single or layered, `inset` included) an effect style; sub-values that reference a token (`{color.shadow}`, or VarVar's `$.Collection.Mode.path`) are bound to the variable of that name, and literals are written as they are (`rem`/`em` via a root font size you set).
+- **Apply a LibLib snapshot**: [LibLib](https://github.com/atropical/liblib) exports a design system's styles as a committed, diffable snapshot. Pick a LibLib *library* snapshot (JSON) and each style record updates the style with the same key — renaming it when the name changed, so layers keep their link — or creates a new one, with its variables bound again by name. Optionally delete styles the snapshot doesn't include (off by default). Edit the snapshot (by hand or with an agent), apply it here, then run LibLib's diff to confirm the file matches. See [LibLib compatibility](#liblib-compatibility).
 - **Review and apply**: nothing touches the document until you review the itemised diff and apply it. One apply is one Figma undo step; a missing font or deleted variable skips that field or style with a warning instead of failing the run.
+
+#### LibLib compatibility
+
+| VarVar | LibLib snapshot schema | Format |
+| --- | --- | --- |
+| 5.0.0 | `liblib/design-system-snapshot@1` | JSON |
+
+Any other schema — including LibLib *usage* snapshots — is refused with a message naming the supported one. TOON snapshots aren't read; export JSON from LibLib. Schema `@1` records a bound variable by name only, so when two collections share that name VarVar binds the first local match and warns in the review.
 
 Styles can only be changed in the design editor; in Dev Mode the composer is read-only. It needs the `teamlibrary` permission to list library variables.
 
@@ -242,6 +251,7 @@ src/
 │   ├── model.ts            # Field addressing, token resolution per mode, defaults
 │   ├── ops.ts              # Diff, bulk swap, generator
 │   ├── composite.ts        # DTCG typography/shadow tokens → styles
+│   ├── liblib.ts           # LibLib snapshot → style drafts (supported schemas pinned here)
 │   ├── css.ts              # Instant CSS previews
 │   ├── catalog.ts          # Variable catalogue (local, extended, library)
 │   ├── readStyles.ts / writeStyles.ts  # Read styles; write them with bindings

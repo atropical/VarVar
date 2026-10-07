@@ -55,6 +55,8 @@ export interface StyleDraft {
     id?: string;
     /** Stable key for the UI list; equals `id` for existing styles. */
     key: string;
+    /** The style's publish key, when it has one (LibLib matches styles on it). */
+    libKey?: string;
     kind: StyleKind;
     name: string;
     description: string;

@@ -7,11 +7,12 @@ import { StylePreview } from "../components/composer/StylePreview";
 import { ReviewPanel } from "../components/composer/ReviewPanel";
 import { GeneratorPanel } from "../components/composer/GeneratorPanel";
 import { BulkSwapPanel } from "../components/composer/BulkSwapPanel";
+import { LibLibPanel } from "../components/composer/LibLibPanel";
 import { BetaBadge, ErrorBox, muted } from "../components/composer/ui";
 import { STYLE_KINDS, STYLE_KIND_LABELS } from "../composer/types";
 import type { StyleDraft } from "../composer/types";
 
-type Mode = "edit" | "review" | "generate" | "swap";
+type Mode = "edit" | "review" | "generate" | "swap" | "liblib";
 
 const Banner: React.FC<{ tone?: "info" | "warning"; children: React.ReactNode }> = ({ tone = "info", children }) => (
     <Flex
@@ -83,6 +84,7 @@ export const StyleComposer: React.FC = () => {
                         <>
                             <Button variant="secondary" onClick={() => setChoosingKind(true)}>New style</Button>
                             <Button variant="secondary" onClick={() => setMode("generate")}>Generate from tokens</Button>
+                            <Button variant="secondary" onClick={() => setMode("liblib")}>Apply LibLib snapshot</Button>
                             <Button variant="secondary" disabled={checkedDrafts.length === 0} onClick={() => setMode("swap")}>
                                 Swap tokens{checkedDrafts.length > 0 ? ` (${checkedDrafts.length})` : ""}
                             </Button>
@@ -176,6 +178,15 @@ export const StyleComposer: React.FC = () => {
                         settings={c.settings}
                         onSaveSettings={c.saveSettings}
                         onAdd={c.addDrafts}
+                        onClose={() => setMode("edit")}
+                    />
+                )}
+
+                {mode === "liblib" && (
+                    <LibLibPanel
+                        existing={allDrafts}
+                        variables={c.catalog.variables}
+                        onAdd={(drafts, deleteKeys) => { c.addDrafts(drafts); c.markDeleted(deleteKeys); setMode("review"); }}
                         onClose={() => setMode("edit")}
                     />
                 )}
