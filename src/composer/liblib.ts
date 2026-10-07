@@ -11,6 +11,9 @@ import type { CatalogVariable, StyleDraft, StyleKind, TextProps } from "./types"
  * (`npx @atropical/liblib` can do that).
  */
 
+export const LIBLIB_PLUGIN_URL = "https://www.figma.com/community/plugin/1665168884798434636";
+export const LIBLIB_REPO_URL = "https://github.com/atropical/liblib";
+
 /**
  * LibLib snapshot schemas this version of VarVar can apply. Within @1, a
  * record's optional `bindings` (collection-qualified, LibLib plugin 2.3.0+ / reader 0.2.0)
