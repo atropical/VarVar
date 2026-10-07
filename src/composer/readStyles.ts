@@ -21,7 +21,7 @@ export const readTextProps = (s: TextStyle): TextProps => ({
 });
 
 export const styleToDraft = (s: BaseStyle): StyleDraft => {
-    const base = { id: s.id, key: s.id, name: s.name, description: s.description };
+    const base = { id: s.id, key: s.id, libKey: s.key || undefined, name: s.name, description: s.description };
     switch (s.type) {
         case "PAINT":
             return { ...base, kind: "PAINT", paints: plain(s.paints) as Paint[] };

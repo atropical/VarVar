@@ -269,6 +269,11 @@ export const useComposer = () => {
         setOrderTouched(true);
     }, [drafts]);
 
+    /** Marks stored styles for deletion (reviewed before anything is removed). */
+    const markDeleted = useCallback((keys: string[]) => {
+        setDeleted((prev) => new Set([...prev, ...keys.filter((k) => drafts.get(k)?.id)]));
+    }, [drafts]);
+
     const revert = useCallback((key: string) => {
         const stored = original.get(key);
         if (stored) updateDraft(key, stored);
@@ -305,7 +310,7 @@ export const useComposer = () => {
         selected, selectedKey, setSelectedKey, checked, setChecked,
         modes, setModes, sampleText, setSampleText, exact,
         usage, requestUsage, cancelUsage,
-        updateDraft, updateMany, addDrafts, createStyle, duplicateStyle, toggleDelete, revert, discardAll,
+        updateDraft, updateMany, addDrafts, createStyle, duplicateStyle, toggleDelete, markDeleted, revert, discardAll,
         apply, applying, applyResult, setApplyResult, error, setError, externalChange, reload,
     };
 };
