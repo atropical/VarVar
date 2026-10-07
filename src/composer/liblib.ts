@@ -13,7 +13,7 @@ import type { CatalogVariable, StyleDraft, StyleKind, TextProps } from "./types"
 
 /**
  * LibLib snapshot schemas this version of VarVar can apply. Within @1, a
- * record's optional `bindings` (collection-qualified, LibLib plugin 2.3.0+)
+ * record's optional `bindings` (collection-qualified, LibLib plugin 2.3.0+ / reader 0.2.0)
  * is used when present; without it bindings fall back to names alone.
  */
 export const SUPPORTED_LIBLIB_SCHEMAS = ["liblib/design-system-snapshot@1"] as const;
