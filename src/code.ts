@@ -12,6 +12,8 @@ import { importVariables, previewImport } from "./utils/importJSON";
 import { OutputFormats, MessageTypes, PluginCommands, PluginMessage, ExportFile, ImportMode } from "./types.d";
 import type { ExportUnit } from "./types.d";
 import { DEFAULT_EXPORT_UNIT, DEFAULT_ROOT_FONT_SIZE } from "./utils/units";
+import { handleComposerMessage } from "./composer/handlers";
+import type { ComposerMessage } from "./composer/types";
 
 figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
 
@@ -19,6 +21,10 @@ figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
  * Handle plugin menu commands
  */
 figma.on('run', ({ command }) => {
+    // The composer shows a style list, an editor and a preview side by side.
+    if (command === PluginCommands.COMPOSE_STYLES) {
+        figma.ui.resize(1040, 680);
+    }
     // Send the command to UI immediately when plugin starts
     figma.ui.postMessage({
         type: MessageTypes.BASIC_INFO,
@@ -185,7 +191,12 @@ async function handleImport(importFiles: string[], importMode: ImportMode, rootF
 /**
  * Main message handler for plugin communication
  */
-figma.ui.onmessage = async (msg: PluginMessage) => {
+figma.ui.onmessage = async (msg: PluginMessage | ComposerMessage) => {
+    if (typeof msg.type === "string" && msg.type.startsWith("COMPOSER.")) {
+        await handleComposerMessage(msg as ComposerMessage);
+        return;
+    }
+    msg = msg as PluginMessage;
     switch (msg.type) {
         case MessageTypes.GET_BASIC_INFO:
             await handleBasicInfo(msg.command);
