@@ -18,8 +18,11 @@ export default {
     {"separator": true},
     { "command": "export", "name": "Export Variables" },
     {"separator": true},
-    { "command": "import-json", "name": "Import…" }
+    { "command": "import-json", "name": "Import…" },
+    {"separator": true},
+    { "command": "compose-styles", "name": "Compose Styles… (BETA)" }
   ],
+  "permissions": ["teamlibrary"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": ["none"]
