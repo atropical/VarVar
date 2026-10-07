@@ -4,6 +4,8 @@ import { Flex, Text, Label, Button } from "figma-kit";
 interface FileImportInputProps {
     fileNames: string[];
     onFilesSelected: (fileNames: string[], contents: string[]) => void;
+    /** Button emphasis; "primary" when picking the file is the view's main action. */
+    variant?: "primary" | "secondary";
 }
 
 /**
@@ -16,7 +18,8 @@ interface FileImportInputProps {
  */
 export const FileImportInput: React.FC<FileImportInputProps> = ({
     fileNames,
-    onFilesSelected
+    onFilesSelected,
+    variant = "secondary"
 }) => {
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -46,7 +49,7 @@ export const FileImportInput: React.FC<FileImportInputProps> = ({
             />
 
             <Button
-                variant="secondary"
+                variant={variant}
                 size="medium"
                 fullWidth={true}
                 onClick={() => inputRef.current?.click()}

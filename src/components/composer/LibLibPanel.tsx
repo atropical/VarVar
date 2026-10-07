@@ -59,6 +59,7 @@ export const LibLibPanel: React.FC<LibLibPanelProps> = ({ existing, variables, o
             </Text>
 
             <FileImportInput
+                variant="primary"
                 fileNames={fileNames}
                 onFilesSelected={(names, contents) => { setFileNames(names.slice(0, 1)); setText(contents[0] ?? null); }}
             />
@@ -66,11 +67,7 @@ export const LibLibPanel: React.FC<LibLibPanelProps> = ({ existing, variables, o
             <Flex
                 direction="column"
                 gap="1"
-                style={{
-                    ...panel,
-                    borderColor: "var(--figma-color-border-brand)",
-                    background: "var(--figma-color-bg-brand-tertiary)",
-                }}
+                style={panel}
             >
                 <Text weight="strong">What is LibLib?</Text>
                 <Text style={muted}>
