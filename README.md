@@ -71,6 +71,14 @@ The unit and DTCG options don't apply to the legacy (v2.x) JSON shape, which pre
 
 Across every format, numbers are emitted as the shortest decimal that round-trips back to the 32-bit float Figma stores. A `732.8` typed in Figma exports as `732.8` instead of `732.7999877929688`, and values that genuinely need more digits keep them.
 
+### Colours with Their Own Opacity
+
+Figma lets a colour variable link to another colour at its own opacity — `palette/white` at 97% — or pair a colour with a linked opacity. Each format exports what it can express:
+
+- **CSS & Tailwind** keep the links: `color-mix(in srgb, var(--palette--white) 97%, transparent)`, with a linked opacity written as `calc(var(--…) * 1%)`.
+- **JSON** writes the colour it renders as in `$value`, so any DTCG tool reads it correctly, and keeps the links in `$extensions.figma.composedColor` (`color` and `opacity`, each a reference or a literal). Import uses that to rebuild the linked value.
+- **JavaScript & CSV** write the colour it renders as.
+
 ### Code Syntax
 
 Figma lets you give each variable a per-platform **Code Syntax** (Web, Android, iOS). VarVar carries it through:

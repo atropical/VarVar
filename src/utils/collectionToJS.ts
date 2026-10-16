@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { flattenComposedColor } from "./composedColor";
 import { cleanFloat32 } from "./numberFormat";
 import { toCamelCase } from "./stringTransformation";
 import { getMatchingModeName, normalizeCodeSyntax } from "./variableUtils";
@@ -126,7 +127,7 @@ async function processCollection({
       const figVar = await figma.variables.getVariableByIdAsync(variableId);
       if (figVar !== null) {
         const { name, resolvedType, valuesByMode, scopes, description, codeSyntax }: Variable = figVar;
-        const value: VariableValue = valuesByMode[mode.modeId];
+        const value = await flattenComposedColor(valuesByMode[mode.modeId], mode.name);
         const dtcgType = resolveScopedType(scopes, resolvedType);
         const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
 
@@ -210,9 +211,7 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           const dtcgType = resolveScopedType(scopes, resolvedType);
           const usedCodeSyntax = normalizeCodeSyntax(codeSyntax);
           const overridesForVar = variableOverrides[variableId];
-          const overrideValue: VariableValue | undefined = overridesForVar
-            ? overridesForVar[mode.modeId]
-            : undefined;
+          const overrideValue = await flattenComposedColor(overridesForVar ? overridesForVar[mode.modeId] : undefined, mode.name);
           const isInherited = overrideValue === undefined;
 
           let currentObj = variables[toCamelCase(mode.name)];

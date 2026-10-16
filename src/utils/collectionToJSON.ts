@@ -6,6 +6,8 @@ import { DEFAULT_UNIT_OPTIONS, formatDtcgNumericValue, toUnitOptions } from "./u
 import type { DtcgDimensionValue, UnitOptions } from "./units";
 import type { DtcgColorValue } from "./colorSpaces";
 import { toFileSlug } from "./stringTransformation";
+import { composedColorToRgba, isComposedColor, isVariableAlias } from "./composedColor";
+import type { ComposedColor } from "./composedColor";
 import type { ExportFile, ExportUnit } from "../types.d";
 
 const validTypes = new Set(["COLOR", "FLOAT", "BOOLEAN", "STRING"]);
@@ -114,6 +116,30 @@ async function resolveAliasValue(
 }
 
 /**
+ * Writes a composed colour (a colour plus its own opacity, either part linked):
+ * `$value` is the colour it renders as, so any DTCG consumer reads it right,
+ * and `$extensions.figma.composedColor` keeps the links — `color` as an alias
+ * reference or colour, `opacity` as a percentage or alias reference — so the
+ * import can rebuild the composed value instead of a flat colour.
+ */
+async function writeComposedColor(
+  obj: { $value?: unknown; $extensions: { figma: Record<string, unknown> } },
+  value: ComposedColor,
+  modeName: string,
+  scopes: VariableScope[],
+  options: JsonValueOptions
+): Promise<void> {
+  const rendered = await composedColorToRgba(value, modeName);
+  obj.$value = rendered ? formatLeafValue(rendered, "COLOR", scopes, options) : "_unlinked";
+  obj.$extensions.figma.composedColor = {
+    color: isVariableAlias(value.color)
+      ? await resolveAliasValue(value.color, modeName)
+      : formatLeafValue(value.color as RGBA, "COLOR", scopes, options),
+    opacity: typeof value.opacity === "number" ? cleanFloat32(value.opacity) : await resolveAliasValue(value.opacity, modeName),
+  };
+}
+
+/**
  * Processes a variable collection into JSON format
  * @param collection - The variable collection to process
  * @param options - The export's value-shaping options
@@ -147,7 +173,10 @@ async function processCollection({
           obj.$description = description || '';
           obj.$extensions = { figma: { scopes, resolvedType, ...(usedCodeSyntax ? { codeSyntax: usedCodeSyntax } : {}) } };
 
-          if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
+          if (isComposedColor(value)) {
+            await writeComposedColor(obj, value, mode.name, scopes, options);
+          }
+          else if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
             obj.$value = await resolveAliasValue(value, mode.name);
           }
           else {
@@ -206,6 +235,9 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
             const parentCollName = parentCollection ? parentCollection.name : name;
             const parentModeName = parentMode ? parentMode.name : mode.name;
             obj.$value = `$.${parentCollName}.${parentModeName}.${varName.replace(/\//g, ".")}`;
+          }
+          else if (isComposedColor(overrideValue)) {
+            await writeComposedColor(obj, overrideValue, mode.name, scopes, options);
           }
           else if (typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS') {
             obj.$value = await resolveAliasValue(overrideValue, mode.name);

@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { composedColorToCss, isComposedColor } from "./composedColor";
 import { formatFloat32 } from "./numberFormat";
 import {
     toCssVar,
@@ -250,7 +251,13 @@ async function processCollection({
                     const isNumber: boolean = resolvedType === "FLOAT";
                     const isBool: boolean = resolvedType === "BOOLEAN";
 
-                    if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
+                    if (isComposedColor(value)) {
+                        cssValue = await composedColorToCss(value, async (alias) => {
+                            const linked = await figma.variables.getVariableByIdAsync(alias.id);
+                            return linked ? `var(${resolveTailwindVarName(linked, groupSeparator, nameOptions)})` : "initial";
+                        });
+                    }
+                    else if (typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS') {
                         const linkedVar = await figma.variables.getVariableByIdAsync(value.id);
 
                         if(linkedVar) {

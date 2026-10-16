@@ -5,6 +5,7 @@ import { DEFAULT_ROOT_FONT_SIZE, isFontRelativeUnit, normalizeRootFontSize, pars
 import { DTCG_FONT_WEIGHT_KEYWORDS } from "./scopeToDTCG";
 import { CODE_SYNTAX_PLATFORMS, normalizeCodeSyntax } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
+import { isComposedColor } from "./composedColor";
 import { ImportMode } from "../types.d";
 import type { ImportSummary, ImportDiff, ImportDiffVariable, ImportDiffCodeSyntax } from "../types.d";
 
@@ -53,6 +54,12 @@ interface ImportRecord {
    * record adopts whatever type the variable's other modes settle on.
    */
   typeDeferred: boolean;
+  /**
+   * VarVar's `$extensions.figma.composedColor`: the links behind a colour
+   * that is another colour at some opacity. When present, the import rebuilds
+   * that composed value instead of writing the flat `$value`.
+   */
+  composed?: { color: unknown; opacity: unknown };
 }
 
 function isTokenLeaf(node: unknown): node is Record<string, unknown> {
@@ -142,8 +149,9 @@ function normalizeLeaf(node: Record<string, unknown>): {
   rawValue: unknown;
   typeDeferred: boolean;
   note?: string;
+  composed?: { color: unknown; opacity: unknown };
 } {
-  const extensions = node.$extensions as { figma?: { scopes?: VariableScope[]; resolvedType?: VariableResolvedDataType; codeSyntax?: CodeSyntaxMap } } | undefined;
+  const extensions = node.$extensions as { figma?: { scopes?: VariableScope[]; resolvedType?: VariableResolvedDataType; codeSyntax?: CodeSyntaxMap; composedColor?: { color?: unknown; opacity?: unknown } } } | undefined;
   const figma = extensions?.figma;
 
   const rawType = node.$type as string | undefined;
@@ -170,6 +178,9 @@ function normalizeLeaf(node: Record<string, unknown>): {
     rawValue: node.$value,
     typeDeferred: fallback?.typeDeferred ?? false,
     note: fallback?.note,
+    composed: figma?.composedColor && figma.composedColor.color !== undefined && figma.composedColor.opacity !== undefined
+      ? { color: figma.composedColor.color, opacity: figma.composedColor.opacity }
+      : undefined,
   };
 }
 
@@ -184,7 +195,7 @@ function walkVariables(
 ): void {
   for (const [key, node] of Object.entries(variables)) {
     if (isTokenLeaf(node)) {
-      const { resolvedType, scopes, description, codeSyntax, rawValue, typeDeferred, note } = normalizeLeaf(node);
+      const { resolvedType, scopes, description, codeSyntax, rawValue, typeDeferred, note, composed } = normalizeLeaf(node);
       const path = [...pathParts, key].join("/");
       if (!resolvedType || !validTypes.has(resolvedType)) {
         warnings.push(`Skipped "${path}" in "${collectionName}" (${modeName}): unrecognized or unsupported $type "${String(node.$type)}".`);
@@ -210,6 +221,7 @@ function walkVariables(
         codeSyntax,
         rawValue,
         typeDeferred,
+        ...(composed && resolvedType === "COLOR" ? { composed } : {}),
       });
     } else if (typeof node === "object" && node !== null) {
       walkVariables(node as Record<string, unknown>, collectionName, modeName, [...pathParts, key], records, warnings, unitsSeen);
@@ -580,6 +592,11 @@ async function formatStoredValue(value: VariableValue | undefined, type: Variabl
     const target = await figma.variables.getVariableByIdAsync(value.id);
     return target ? `→ ${target.name}` : "→ (broken alias)";
   }
+  if (isComposedColor(value)) {
+    const color = (await formatStoredValue(value.color as VariableValue, "COLOR")) ?? "?";
+    const opacity = typeof value.opacity === "number" ? `${cleanFloat32(value.opacity)}%` : (await formatStoredValue(value.opacity, "FLOAT")) ?? "?";
+    return `${color} @ ${opacity}`;
+  }
   return formatLiteral(value, type);
 }
 
@@ -614,7 +631,7 @@ function literalValueEquals(
   type: VariableResolvedDataType,
   quantized: boolean
 ): boolean {
-  if (before === undefined || isAliasStoredValue(before)) return false;
+  if (before === undefined || isAliasStoredValue(before) || isComposedColor(before)) return false;
   if (type === "COLOR") {
     const a = before as RGBA;
     const b = after as RGBA;
@@ -1046,7 +1063,29 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     }
   };
 
+  /** The variable an alias reference string points at, among the file's and the document's variables. */
+  const findAliasTarget = async (raw: string, collectionName: string): Promise<{ modeRef: ModeRef; varRef: VariableRef } | undefined> => {
+    for (const candidate of resolveAliasCandidates(raw, collectionName, collectionRefsByName)) {
+      const targetCollRef = collectionRefsByName.get(candidate.collectionName);
+      if (!targetCollRef) continue;
+      const targetModeRef = targetCollRef.modes.find((m) => m.name === candidate.modeName);
+      if (!targetModeRef) continue;
+
+      const targetPathKey = `${candidate.collectionName} ${candidate.path}`;
+      let targetVarRef = variableRefsByPath.get(targetPathKey);
+      if (!targetVarRef && targetCollRef.real) {
+        const found = await findVariableByName(targetCollRef.real, candidate.path);
+        if (found) {
+          targetVarRef = { path: candidate.path, collectionName: candidate.collectionName, real: found, isNew: false, resolvedType: found.resolvedType };
+        }
+      }
+      if (targetVarRef) return { modeRef: targetModeRef, varRef: targetVarRef };
+    }
+    return undefined;
+  };
+
   const aliasRecords: ImportRecord[] = [];
+  const composedRecords: ImportRecord[] = [];
 
   for (const record of records) {
     const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
@@ -1055,6 +1094,10 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
       summary.warnings.push(
         `Skipped unlinked reference for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}).`
       );
+      continue;
+    }
+    if (record.composed) {
+      composedRecords.push(record);
       continue;
     }
     if (isAliasValue(record.rawValue)) {
@@ -1081,28 +1124,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
     const modeRef = collRef.modes.find((m) => m.name === record.modeName);
     if (!modeRef) continue;
 
-    const candidates = resolveAliasCandidates(record.rawValue as string, record.collectionName, collectionRefsByName);
-
-    let resolvedTarget: { modeRef: ModeRef; varRef: VariableRef } | undefined;
-    for (const candidate of candidates) {
-      const targetCollRef = collectionRefsByName.get(candidate.collectionName);
-      if (!targetCollRef) continue;
-      const targetModeRef = targetCollRef.modes.find((m) => m.name === candidate.modeName);
-      if (!targetModeRef) continue;
-
-      const targetPathKey = `${candidate.collectionName} ${candidate.path}`;
-      let targetVarRef = variableRefsByPath.get(targetPathKey);
-      if (!targetVarRef && targetCollRef.real) {
-        const found = await findVariableByName(targetCollRef.real, candidate.path);
-        if (found) {
-          targetVarRef = { path: candidate.path, collectionName: candidate.collectionName, real: found, isNew: false, resolvedType: found.resolvedType };
-        }
-      }
-      if (targetVarRef) {
-        resolvedTarget = { modeRef: targetModeRef, varRef: targetVarRef };
-        break;
-      }
-    }
+    const resolvedTarget = await findAliasTarget(record.rawValue as string, record.collectionName);
 
     const diffEntry = variableDiffByPath.get(pathKey);
 
@@ -1147,6 +1169,68 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
           `Failed to set alias for "${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName}): ${err instanceof Error ? err.message : String(err)}`
         );
       }
+    }
+  }
+
+  // Composed colours last: the variables they link to now exist. Each part is
+  // a link (resolved like any alias) or a literal (a colour, or a percentage).
+  for (const record of composedRecords) {
+    const pathKey = `${record.collectionName} ${record.pathParts.join("/")}`;
+    const varRef = variableRefsByPath.get(pathKey);
+    const collRef = collectionRefsByName.get(record.collectionName);
+    if (!varRef || !collRef || !record.composed) continue;
+    const modeRef = collRef.modes.find((m) => m.name === record.modeName);
+    if (!modeRef) continue;
+    const label = `"${record.pathParts.join("/")}" in "${record.collectionName}" (${record.modeName})`;
+    const diffEntry = variableDiffByPath.get(pathKey);
+
+    const resolvePart = async (raw: unknown): Promise<{ alias?: VariableRef; literal?: unknown; failed?: boolean }> => {
+      if (!isAliasValue(raw)) return { literal: raw };
+      const target = await findAliasTarget(raw, record.collectionName);
+      return target ? { alias: target.varRef } : { failed: true };
+    };
+    const colorPart = await resolvePart(record.composed.color);
+    const opacityPart = await resolvePart(record.composed.opacity);
+    const opacityNumber = Number(opacityPart.literal);
+    // Figma only stores a composed colour when at least one part is a link.
+    const noLink = !colorPart.alias && !opacityPart.alias;
+    if (colorPart.failed || opacityPart.failed || noLink || (!opacityPart.alias && !Number.isFinite(opacityNumber))) {
+      // The links can't be rebuilt; the flat colour in $value is still right.
+      if (!noLink) summary.warnings.push(`Couldn't rebuild the linked colour + opacity for ${label}; imported the colour it renders as instead.`);
+      if (!isAliasValue(record.rawValue)) await applyLiteralValue(record, varRef, modeRef, diffEntry);
+      continue;
+    }
+
+    let color: RGB | RGBA | undefined;
+    if (!colorPart.alias) {
+      try {
+        color = parseTokenColor(colorPart.literal).rgba;
+      } catch (err) {
+        summary.warnings.push(`Skipped ${label}: ${err instanceof Error ? err.message : String(err)}`);
+        continue;
+      }
+    }
+
+    const beforeRaw = (!varRef.isNew && !modeRef.isNew && varRef.real) ? varRef.real.valuesByMode[modeRef.modeId] : undefined;
+    const before = await formatStoredValue(beforeRaw, varRef.resolvedType);
+    const after = `${colorPart.alias ? `→ ${colorPart.alias.path}` : rgbToCssColor(color as RGBA)} @ ${opacityPart.alias ? `→ ${opacityPart.alias.path}` : `${cleanFloat32(opacityNumber)}%`}`;
+    const changed = before !== after;
+    diffEntry?.values.push({ modeName: record.modeName, before, after, changed });
+    if (!changed) continue;
+
+    if (dryRun) {
+      summary.valuesSet += 1;
+      continue;
+    }
+    if (!varRef.real || (colorPart.alias && !colorPart.alias.real) || (opacityPart.alias && !opacityPart.alias.real)) continue;
+    const value = (colorPart.alias
+      ? { color: figma.variables.createVariableAlias(colorPart.alias.real!), opacity: opacityPart.alias ? figma.variables.createVariableAlias(opacityPart.alias.real!) : opacityNumber }
+      : { color: color!, opacity: figma.variables.createVariableAlias(opacityPart.alias!.real!) }) as VariableValue;
+    try {
+      varRef.real.setValueForMode(modeRef.modeId, value);
+      summary.valuesSet += 1;
+    } catch (err) {
+      summary.warnings.push(`Failed to set the linked colour + opacity for ${label}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

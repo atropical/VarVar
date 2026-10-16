@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { composedColorToCss, isComposedColor } from "./composedColor";
 import {
   toCssVar,
   toCodeSyntaxCssVar,
@@ -114,7 +115,9 @@ async function processCollection({
 
         if (value !== undefined && validTypes.has(resolvedType)) {
           const cssVarName = resolveCssVarName(figVar, groupSeparator, nameOptions);
-          const cssValue = typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS'
+          const cssValue = isComposedColor(value)
+            ? await composedColorToCss(value, (alias) => resolveCssAliasValue(alias, groupSeparator, nameOptions))
+            : typeof value === 'object' && 'type' in value && value.type === 'VARIABLE_ALIAS'
             ? await resolveCssAliasValue(value, groupSeparator, nameOptions)
             : formatCssValue(value, resolvedType, scopes, unitOptions, appendPxToUnscoped);
 
@@ -174,7 +177,9 @@ async function processExtendedCollection(extCollection: ExtendedVariableCollecti
           }
 
           const cssVarName = resolveCssVarName(figVar, groupSeparator, nameOptions);
-          const cssValue = typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS'
+          const cssValue = isComposedColor(overrideValue)
+            ? await composedColorToCss(overrideValue, (alias) => resolveCssAliasValue(alias, groupSeparator, nameOptions))
+            : typeof overrideValue === 'object' && 'type' in overrideValue && overrideValue.type === 'VARIABLE_ALIAS'
             ? await resolveCssAliasValue(overrideValue, groupSeparator, nameOptions)
             : formatCssValue(overrideValue, resolvedType, scopes, unitOptions, appendPxToUnscoped);
 

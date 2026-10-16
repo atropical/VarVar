@@ -1,4 +1,5 @@
 import { rgbToCssColor } from "./color";
+import { flattenComposedColor } from "./composedColor";
 import { cleanFloat32 } from "./numberFormat";
 import { getMatchingModeName, CODE_SYNTAX_PLATFORMS } from "./variableUtils";
 import type { CodeSyntaxMap } from "./variableUtils";
@@ -106,7 +107,7 @@ const processCollectionToCSV = async (
 
       if (figVar !== null) {
         const { id, name:varName, resolvedType, valuesByMode, scopes, description, codeSyntax }: Variable = figVar;
-        const varValue: VariableValue = valuesByMode[mode.modeId];
+        const varValue = await flattenComposedColor(valuesByMode[mode.modeId], mode.name);
         const varDescription = `"${description.replace(/"/g, '""')}"` || '';
 
         if (varValue !== undefined && validTypes.has(resolvedType)) {
@@ -175,9 +176,7 @@ const processExtendedCollectionToCSV = async (
         if (validTypes.has(resolvedType)) {
           const varDescription = `"${description.replace(/"/g, '""')}"` || '';
           const overridesForVar = variableOverrides[variableId];
-          const overrideValue: VariableValue | undefined = overridesForVar
-            ? overridesForVar[mode.modeId]
-            : undefined;
+          const overrideValue = await flattenComposedColor(overridesForVar ? overridesForVar[mode.modeId] : undefined, mode.name);
           const isInherited = overrideValue === undefined;
 
           let value: string | boolean | number | RGB;
