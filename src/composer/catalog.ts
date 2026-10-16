@@ -70,9 +70,7 @@ export async function buildLocalCatalog(extraVariableIds: Iterable<string> = [])
     // the local lists; pull them in so their names and values can be shown.
     const pending = [...extraVariableIds];
     for (const v of catalogVars) {
-        for (const value of Object.values(v.valuesByMode)) {
-            if (isAlias(value)) pending.push(value.id);
-        }
+        for (const value of Object.values(v.valuesByMode)) pending.push(...linkedIds(value));
     }
     const seenCollections = new Set(catalogCollections.map((c) => c.id));
     while (pending.length > 0) {
@@ -88,9 +86,7 @@ export async function buildLocalCatalog(extraVariableIds: Iterable<string> = [])
         const entry = toVariable(variable, collection);
         catalogVars.push(entry);
         byId.set(id, entry);
-        for (const value of Object.values(entry.valuesByMode)) {
-            if (isAlias(value)) pending.push(value.id);
-        }
+        for (const value of Object.values(entry.valuesByMode)) pending.push(...linkedIds(value));
     }
 
     foldExtensions(collections, byId);
@@ -150,6 +146,16 @@ export async function loadLibraryVariables(known: Catalog): Promise<Catalog> {
 
 export const isAlias = (value: unknown): value is VariableAlias =>
     typeof value === "object" && value !== null && (value as VariableAlias).type === "VARIABLE_ALIAS";
+
+/** Variable ids a value links to: an alias, or either part of a colour-at-opacity value. */
+const linkedIds = (value: unknown): string[] => {
+    if (isAlias(value)) return [value.id];
+    if (typeof value === "object" && value !== null && "color" in value && "opacity" in value) {
+        const v = value as { color: unknown; opacity: unknown };
+        return [v.color, v.opacity].filter(isAlias).map((a) => a.id);
+    }
+    return [];
+};
 
 /**
  * Resolves a catalogue id to a real Variable, importing library variables by

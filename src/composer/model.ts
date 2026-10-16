@@ -1,6 +1,6 @@
 import { fieldSpec } from "./fields";
 import type { FieldSpec } from "./fields";
-import type { Catalog, CatalogCollection, CatalogValue, CatalogVariable, ModeSelection, StyleDraft, StyleKind, TextBindableField, TextProps } from "./types";
+import type { Catalog, CatalogCollection, CatalogComposedColor, CatalogValue, CatalogVariable, ModeSelection, StyleDraft, StyleKind, TextBindableField, TextProps } from "./types";
 
 /**
  * UI-side model helpers: addressing a single bindable field inside a draft,
@@ -282,6 +282,9 @@ export const styleFromWeight = (weight: number, current: string): string => {
 export const isAliasValue = (v: unknown): v is VariableAlias =>
     typeof v === "object" && v !== null && (v as VariableAlias).type === "VARIABLE_ALIAS";
 
+export const isComposedValue = (v: unknown): v is CatalogComposedColor =>
+    typeof v === "object" && v !== null && "color" in v && "opacity" in v;
+
 export interface CatalogIndex {
     variables: Map<string, CatalogVariable>;
     collections: Map<string, CatalogCollection>;
@@ -315,13 +318,14 @@ export const resolveVariableValue = (
     index: CatalogIndex,
     modes: ModeSelection,
     depth = 0,
-): Exclude<CatalogValue, VariableAlias> | undefined => {
+): Exclude<CatalogValue, VariableAlias | CatalogComposedColor> | undefined => {
     const v = index.variables.get(variableId);
     if (!v || depth > 10) return undefined;
     const modeId = activeMode(v.collectionId, index, modes);
     let value = modeId ? v.valuesByMode[modeId] : undefined;
     if (value === undefined) value = Object.values(v.valuesByMode)[0];
     if (isAliasValue(value)) return resolveVariableValue(value.id, index, modes, depth + 1);
+    if (isComposedValue(value)) return resolveComposed(value, index, modes, depth);
     return value;
 };
 
@@ -352,6 +356,16 @@ export const resolveDraft = (draft: StyleDraft, index: CatalogIndex, modes: Mode
     return out;
 };
 
+/** The colour a "colour at N%" value renders as, under the same mode selection. */
+const resolveComposed = (value: CatalogComposedColor, index: CatalogIndex, modes: ModeSelection, depth: number): RGBA | undefined => {
+    const raw: unknown = isAliasValue(value.color) ? resolveVariableValue(value.color.id, index, modes, depth + 1) : value.color;
+    if (!raw || typeof raw !== "object" || !("r" in raw)) return undefined;
+    const base = raw as RGB | RGBA;
+    const opacity = typeof value.opacity === "number" ? value.opacity : Number(resolveVariableValue(value.opacity.id, index, modes, depth + 1));
+    if (!Number.isFinite(opacity)) return undefined;
+    return { r: base.r, g: base.g, b: base.b, a: ("a" in base ? base.a : 1) * Math.min(100, Math.max(0, opacity)) / 100 };
+};
+
 /** Collections whose modes could change a draft's look, for the mode switcher. */
 export const collectionsUsedBy = (draft: StyleDraft, index: CatalogIndex): CatalogCollection[] => {
     const ids = new Set<string>();
@@ -359,7 +373,13 @@ export const collectionsUsedBy = (draft: StyleDraft, index: CatalogIndex): Catal
         const v = index.variables.get(variableId);
         if (!v || depth > 10) return;
         ids.add(v.collectionId);
-        for (const value of Object.values(v.valuesByMode)) if (isAliasValue(value)) visit(value.id, depth + 1);
+        for (const value of Object.values(v.valuesByMode)) {
+            if (isAliasValue(value)) visit(value.id, depth + 1);
+            if (isComposedValue(value)) {
+                if (isAliasValue(value.color)) visit(value.color.id, depth + 1);
+                if (isAliasValue(value.opacity)) visit(value.opacity.id, depth + 1);
+            }
+        }
     };
     for (const { ref } of listFields(draft)) {
         const id = getBinding(draft, ref);

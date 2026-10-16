@@ -85,7 +85,13 @@ export interface CatalogCollection {
     libraryName?: string;
 }
 
-export type CatalogValue = number | string | boolean | RGBA | VariableAlias;
+/** A colour linked at its own opacity: `opacity` is a percentage, either part may be a link. */
+export interface CatalogComposedColor {
+    color: RGB | RGBA | VariableAlias;
+    opacity: number | VariableAlias;
+}
+
+export type CatalogValue = number | string | boolean | RGBA | VariableAlias | CatalogComposedColor;
 
 /**
  * A variable the picker can offer. Library variables that have not been
