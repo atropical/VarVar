@@ -147,7 +147,7 @@ export const StyleComposer: React.FC<{ initialMode?: ComposerMode }> = ({ initia
             boxSizing: "border-box",
             overflow: "hidden",
         }}>
-            <Flex gap="2" align="center" style={{ flexWrap: "wrap" }}>
+            <Flex gap="2" align="center" style={{ flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--figma-color-border)" }}>
                 <Breadcrumb mode={mode} style={selected} onHome={() => setMode("edit")} />
                 <BetaBadge />
                 <div style={{ flex: 1 }} />

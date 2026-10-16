@@ -67,7 +67,7 @@ export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, di
 
     return (
         <Flex direction="column" gap="2" style={{ minHeight: 0, flex: 1, height: "100%", overflow: "hidden" }}>
-            {onNew && <Button variant="secondary" fullWidth onClick={onNew}>+ New style</Button>}
+            {onNew && <Button variant="primary" fullWidth onClick={onNew}>+ New style</Button>}
             <Input placeholder="Search styles" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search styles" />
             <Flex gap="1" style={{ flexWrap: "wrap" }}>
                 {STYLE_KINDS.map((k) => {
