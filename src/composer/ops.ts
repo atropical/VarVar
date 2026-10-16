@@ -81,44 +81,135 @@ export const diffDraft = (before: StyleDraft | undefined, after: StyleDraft, ind
 };
 
 // ---------------------------------------------------------------------------
-// Bulk swap
+// Find & replace
 
-export interface SwapResult {
-    drafts: StyleDraft[];
-    swapped: number;
-    misses: string[];
+export type FindMode = "prefix" | "contains" | "exact" | "regex";
+
+export interface FindOptions {
+    find: string;
+    replace: string;
+    mode: FindMode;
+    caseSensitive: boolean;
+    /** Only bindings to variables in this collection; "" = any. */
+    fromCollectionId: string;
+    /** Look for the new name in this collection; "" = the collection the old variable is in. */
+    toCollectionId: string;
+    /** Also list bindings whose variable no longer exists; they are pointed at the variable named in `replace`. */
+    includeBroken: boolean;
 }
 
+export interface FindMatch {
+    /** Unique per binding: style key + field. */
+    id: string;
+    draftKey: string;
+    ref: FieldRef;
+    styleName: string;
+    fieldLabel: string;
+    fromName: string;
+    toName: string;
+    /** The variable the binding would move to; absent when none fits. */
+    targetId?: string;
+    problem?: string;
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The renamed variable name for one binding, or null when the name doesn't match. */
+const renameFor = (name: string, opts: FindOptions, regex: RegExp | null): string | null => {
+    if (opts.mode === "regex") {
+        if (!regex) return null;
+        regex.lastIndex = 0;
+        if (!regex.test(name)) return null;
+        regex.lastIndex = 0;
+        return name.replace(regex, opts.replace);
+    }
+    const hay = opts.caseSensitive ? name : name.toLowerCase();
+    const needle = opts.caseSensitive ? opts.find : opts.find.toLowerCase();
+    switch (opts.mode) {
+        case "prefix":
+            return hay.startsWith(needle) ? opts.replace + name.slice(opts.find.length) : null;
+        case "exact":
+            return hay === needle ? opts.replace : null;
+        case "contains":
+            return hay.includes(needle) ? name.replace(new RegExp(escapeRegExp(opts.find), opts.caseSensitive ? "g" : "gi"), () => opts.replace) : null;
+    }
+};
+
 /**
- * Re-points every binding whose variable name starts with `fromPrefix` to the
- * variable with the same remainder under `toPrefix` — e.g. `color/brand/` →
- * `color/accent/` turns `color/brand/500` into `color/accent/500`. A full name
- * in both fields swaps one variable for another. Same type is required; the
- * same collection is preferred when names collide.
+ * Every binding in `drafts` that the search matches, with the variable it
+ * would move to. Nothing is changed; {@link applyMatches} does that for the
+ * matches the user keeps. The target must have the same type and be
+ * bindable to the field; the chosen collection wins, then the old one.
  */
-export const bulkSwap = (drafts: StyleDraft[], fromPrefix: string, toPrefix: string, variables: CatalogVariable[], index: CatalogIndex): SwapResult => {
-    const misses: string[] = [];
-    let swapped = 0;
-    const out = drafts.map((draft) => {
-        let next = draft;
+export const findMatches = (
+    drafts: StyleDraft[],
+    opts: FindOptions,
+    variables: CatalogVariable[],
+    index: CatalogIndex,
+): { matches: FindMatch[]; error?: string } => {
+    let regex: RegExp | null = null;
+    if (opts.mode === "regex" && opts.find) {
+        try {
+            regex = new RegExp(opts.find, opts.caseSensitive ? "g" : "gi");
+        } catch (error) {
+            return { matches: [], error: error instanceof Error ? error.message : String(error) };
+        }
+    }
+    const matches: FindMatch[] = [];
+    for (const draft of drafts) {
         for (const f of listFields(draft)) {
             const id = getBinding(draft, f.ref);
-            const current = id ? index.variables.get(id) : undefined;
-            if (!current || !current.name.startsWith(fromPrefix)) continue;
-            const targetName = toPrefix + current.name.slice(fromPrefix.length);
-            const candidates = variables.filter((v) => v.name === targetName && v.resolvedType === current.resolvedType);
-            const target = candidates.find((v) => v.collectionId === current.collectionId) ?? candidates[0];
-            if (!target) {
-                misses.push(`${draft.name} · ${f.label}: no ${current.resolvedType.toLowerCase()} variable named "${targetName}"`);
-                continue;
+            if (!id) continue;
+            const current = index.variables.get(id);
+            const base = { id: `${draft.key}|${refKey(f.ref)}`, draftKey: draft.key, ref: f.ref, styleName: draft.name, fieldLabel: f.label };
+
+            let toName: string | null;
+            let fromName: string;
+            let collectionId: string;
+            if (!current) {
+                if (!opts.includeBroken) continue;
+                fromName = "(missing variable)";
+                toName = opts.replace.trim() || null;
+                collectionId = opts.toCollectionId;
+                if (!toName) {
+                    matches.push({ ...base, fromName, toName: "", problem: "Type the variable to bind in “Replace with”." });
+                    continue;
+                }
+            } else {
+                if (opts.fromCollectionId && current.collectionId !== opts.fromCollectionId) continue;
+                if (!opts.find) continue;
+                toName = renameFor(current.name, opts, regex);
+                if (toName === null) continue;
+                fromName = current.name;
+                collectionId = opts.toCollectionId || current.collectionId;
             }
-            if (target.id === id) continue;
-            next = setBinding(next, f.ref, target.id);
-            swapped += 1;
+
+            const fits = variables.filter((v) => v.name === toName && f.spec.resolvedTypes.includes(v.resolvedType)
+                && (!current || v.resolvedType === current.resolvedType));
+            const target = fits.find((v) => v.collectionId === collectionId) ?? (opts.toCollectionId ? undefined : fits[0]);
+            if (target && target.id === id) continue;
+            matches.push({
+                ...base,
+                fromName,
+                toName,
+                targetId: target?.id,
+                problem: target ? undefined : `No ${f.spec.resolvedTypes.join("/").toLowerCase()} variable named “${toName}”${opts.toCollectionId ? " in that collection" : ""}.`,
+            });
         }
-        return next;
-    });
-    return { drafts: out, swapped, misses };
+    }
+    return { matches };
+};
+
+/** Applies the kept matches; returns only the drafts that changed. */
+export const applyMatches = (drafts: StyleDraft[], matches: FindMatch[]): StyleDraft[] => {
+    const byDraft = new Map<string, FindMatch[]>();
+    for (const m of matches) {
+        if (!m.targetId) continue;
+        byDraft.set(m.draftKey, [...(byDraft.get(m.draftKey) ?? []), m]);
+    }
+    return drafts
+        .filter((d) => byDraft.has(d.key))
+        .map((d) => byDraft.get(d.key)!.reduce((acc, m) => setBinding(acc, m.ref, m.targetId!), d));
 };
 
 // ---------------------------------------------------------------------------

@@ -6,13 +6,13 @@ import { StyleEditor } from "../components/composer/StyleEditor";
 import { StylePreview } from "../components/composer/StylePreview";
 import { ReviewPanel } from "../components/composer/ReviewPanel";
 import { GeneratorPanel } from "../components/composer/GeneratorPanel";
-import { BulkSwapPanel } from "../components/composer/BulkSwapPanel";
+import { FindReplacePanel } from "../components/composer/FindReplacePanel";
 import { LibLibPanel } from "../components/composer/LibLibPanel";
 import { BetaBadge, ErrorBox, muted } from "../components/composer/ui";
 import { STYLE_KINDS, STYLE_KIND_LABELS } from "../composer/types";
 import type { StyleDraft } from "../composer/types";
 
-type Mode = "edit" | "review" | "generate" | "swap" | "liblib";
+type Mode = "edit" | "review" | "generate" | "find" | "liblib";
 
 const Banner: React.FC<{ tone?: "info" | "warning"; children: React.ReactNode }> = ({ tone = "info", children }) => (
     <Flex
@@ -85,9 +85,7 @@ export const StyleComposer: React.FC = () => {
                             <Button variant="secondary" onClick={() => setChoosingKind(true)}>New style</Button>
                             <Button variant="secondary" onClick={() => setMode("generate")}>Generate from tokens</Button>
                             <Button variant="secondary" onClick={() => setMode("liblib")}>Apply LibLib snapshot</Button>
-                            <Button variant="secondary" disabled={checkedDrafts.length === 0} onClick={() => setMode("swap")}>
-                                Swap tokens{checkedDrafts.length > 0 ? ` (${checkedDrafts.length})` : ""}
-                            </Button>
+                            <Button variant="secondary" onClick={() => setMode("find")}>Find &amp; replace</Button>
                         </>
                     )
                 )}
@@ -191,12 +189,14 @@ export const StyleComposer: React.FC = () => {
                     />
                 )}
 
-                {mode === "swap" && (
-                    <BulkSwapPanel
-                        targets={checkedDrafts}
+                {mode === "find" && (
+                    <FindReplacePanel
+                        allDrafts={allDrafts.filter((d) => !c.deleted.has(d.key))}
+                        checkedDrafts={checkedDrafts}
                         variables={c.catalog.variables}
+                        collections={c.catalog.collections}
                         index={c.index}
-                        onApply={(drafts) => { c.updateMany(drafts); setMode("edit"); }}
+                        onApply={(drafts) => { c.updateMany(drafts); setMode("review"); }}
                         onClose={() => setMode("edit")}
                     />
                 )}
