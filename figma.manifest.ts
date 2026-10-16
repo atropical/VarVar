@@ -20,7 +20,14 @@ export default {
     {"separator": true},
     { "command": "import-json", "name": "Import…" },
     {"separator": true},
-    { "command": "compose-styles", "name": "Compose Styles… (BETA)" }
+    {"name": "Styles (BETA)",
+      "menu": [
+        { "command": "compose-styles", "name": "Edit & Bind Variables…" },
+        { "command": "compose-find", "name": "Find & Replace Variables…" },
+        { "command": "compose-new", "name": "New Style from Variables…" },
+        { "command": "compose-liblib", "name": "Apply LibLib Snapshot…" }
+      ]
+    }
   ],
   "permissions": ["teamlibrary"],
   "documentAccess": "dynamic-page",

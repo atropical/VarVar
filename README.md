@@ -104,7 +104,14 @@ This only activates when extended collections are present in the file — accoun
 
 ### 🧪 Style Composer (BETA)
 
-**Plugins** → **VarVar** → **Compose Styles… (BETA)** opens a three-column editor: your styles on the left, the selected style in the middle, and its preview on the right.
+**Plugins** → **VarVar** → **Styles (BETA)** opens the style editor in one of four places — the breadcrumb at the top always shows where you are, and **Styles** leads back to the editor:
+
+| Menu item | Opens |
+| --- | --- |
+| **Edit & Bind Variables…** | Your styles on the left, the selected style in the middle, its preview on the right |
+| **Find & Replace Variables…** | Search and re-bind the variables used across styles |
+| **New Style from Variables…** | Build one style: pick its kind and type (e.g. Effect → Drop shadow), then a variable for each field |
+| **Apply LibLib Snapshot…** | Make this file's styles match a LibLib snapshot |
 
 - **Every bindable field, all four style kinds**: fill and gradient-stop colours; font family, style, weight, size, line height, letter spacing, paragraph spacing and indent; drop/inner shadow colour, offset, blur and spread, and blur radius; grid count, gutter, margin and size. Layers can be added, removed, reordered, and hidden, and grid colours edited; layers Figma can't bind (images, noise, glass, shaders) are kept untouched.
 - **Token picker**: only variables of the right type are listed — those scoped for the field first, unscoped ones next, and those scoped for something else on request. Local, extended-collection, and enabled-library variables are all offered; a library variable is imported into the file when the change is applied. **Detach** keeps the value the token resolved to, as Figma does.
@@ -112,7 +119,8 @@ This only activates when extended collections are present in the file — accoun
 - **Usage**: the selected style's layer count comes from Figma's own consumer lookup, shown as `999+` past that; on a large file you can stop waiting.
 - **Reorder styles**: move the selected style up or down within its folder; the new order is applied with everything else.
 - **Find & replace**: search the variables bound in styles — contains, starts with, exact name or regex (with `$1` groups) — optionally within one collection, and re-bind every match to the renamed variable, in the same collection or another. Broken bindings (to variables that no longer exist) can be found and pointed at a variable by name. Every match is listed with a tick box before anything goes to the review.
-- **Generate from tokens**: pick what to make (colour styles, typography, shadows, layout grids) and a token group. Each sub-group becomes a style, the field each token fills is guessed from its scopes and then its name (`size`, `lh`, `blur`, `gutter`, …), and your corrections are remembered in the file. Or pick a **DTCG token file** as the source: every `typography` token becomes a text style and every `shadow` token (single or layered, `inset` included) an effect style; sub-values that reference a token (`{color.shadow}`, or VarVar's `$.Collection.Mode.path`) are bound to the variable of that name, and literals are written as they are (`rem`/`em` via a root font size you set).
+- **New style from variables**: **+ New style** at the top of the list (or the menu item) opens a builder — choose the kind and type, pick a variable for each field (a drop shadow's colour, X, Y, blur and spread), name it, and watch the preview. **Add and build another** keeps you in the builder.
+- **Many styles from a token group** (inside the builder): pick what to make (colour styles, typography, shadows, layout grids) and a token group. Each sub-group becomes a style, the field each token fills is guessed from its scopes and then its name (`size`, `lh`, `blur`, `gutter`, …), and your corrections are remembered in the file. Or pick a **DTCG token file** as the source: every `typography` token becomes a text style and every `shadow` token (single or layered, `inset` included) an effect style; sub-values that reference a token (`{color.shadow}`, or VarVar's `$.Collection.Mode.path`) are bound to the variable of that name, and literals are written as they are (`rem`/`em` via a root font size you set).
 - **Apply a LibLib snapshot**: [LibLib](https://www.figma.com/community/plugin/1665168884798434636) exports a design system's styles as a committed, diffable snapshot. Pick a LibLib *library* snapshot (JSON) and each style record updates the style with the same key — renaming it when the name changed, so layers keep their link — or creates a new one, with its variables bound again by name. Optionally delete styles the snapshot doesn't include (off by default). Edit the snapshot (by hand or with an agent), apply it here, then run LibLib's diff to confirm the file matches. See [LibLib compatibility](#liblib-compatibility).
 - **Review and apply**: nothing touches the document until you review the itemised diff and apply it. One apply is one Figma undo step; a missing font or deleted variable skips that field or style with a warning instead of failing the run.
 
@@ -122,7 +130,7 @@ This only activates when extended collections are present in the file — accoun
 
 1. In the library file, run **LibLib → Export Library Snapshot…** as **JSON** and commit it.
 2. Change the `styles[]` records — rename, rebind to other variables, add or remove styles — by hand or with an agent.
-3. Run **VarVar → Compose Styles… → Apply LibLib snapshot**, review the diff, and apply. Renamed styles keep every layer link, because records match on style key, not name.
+3. Run **VarVar → Styles → Apply LibLib Snapshot…**, review the diff, and apply. Renamed styles keep every layer link, because records match on style key, not name.
 4. Run **LibLib → Diff Against Library Snapshot…** to confirm the file now matches.
 
 #### LibLib compatibility
@@ -238,7 +246,7 @@ src/
 │   ├── ImportSummaryPanel.tsx # Import result counts and warnings
 │   ├── HelpTip.tsx            # "?" badge with a figma-kit tooltip
 │   ├── Footer.tsx
-│   └── composer/              # Style Composer: list, editor, field rows, token picker, preview, review, generator, swap
+│   └── composer/              # Style Composer: list, editor, builder, field rows, token picker, preview, review, generator, find & replace
 ├── hooks/              # Custom React hooks
 │   ├── useExportData.ts    # Hook for managing export data and state
 │   ├── useImportData.ts    # Hook for managing import data and state

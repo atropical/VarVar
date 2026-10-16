@@ -8,16 +8,19 @@ import { ReviewPanel } from "../components/composer/ReviewPanel";
 import { GeneratorPanel } from "../components/composer/GeneratorPanel";
 import { FindReplacePanel } from "../components/composer/FindReplacePanel";
 import { LibLibPanel } from "../components/composer/LibLibPanel";
+import { StyleBuilder } from "../components/composer/StyleBuilder";
 import { BetaBadge, ErrorBox, muted } from "../components/composer/ui";
-import { STYLE_KINDS, STYLE_KIND_LABELS } from "../composer/types";
+import { STYLE_KIND_LABELS } from "../composer/types";
 import type { StyleDraft } from "../composer/types";
 
-type Mode = "edit" | "review" | "generate" | "find" | "liblib";
+export type ComposerMode = "edit" | "new" | "review" | "generate" | "find" | "liblib";
+type Mode = ComposerMode;
 
 /** Breadcrumb label per view; "edit" shows the selected style instead. */
 const MODE_LABELS: Record<Exclude<Mode, "edit">, string> = {
     review: "Review changes",
-    generate: "Generate from variables",
+    new: "New style from variables",
+    generate: "Many styles from a token group",
     find: "Find & replace variables",
     liblib: "Apply LibLib snapshot",
 };
@@ -87,10 +90,9 @@ const Banner: React.FC<{ tone?: "info" | "warning"; children: React.ReactNode }>
  * mode), generate new styles from token groups, and apply everything after a
  * dry-run review.
  */
-export const StyleComposer: React.FC = () => {
+export const StyleComposer: React.FC<{ initialMode?: ComposerMode }> = ({ initialMode = "edit" }) => {
     const c = useComposer();
-    const [mode, setMode] = useState<Mode>("edit");
-    const [choosingKind, setChoosingKind] = useState(false);
+    const [mode, setMode] = useState<Mode>(initialMode);
     const readOnly = !c.canEdit;
 
     if (!c.loaded) {
@@ -104,6 +106,33 @@ export const StyleComposer: React.FC = () => {
     const selected = c.selected;
     const checkedDrafts = [...c.checked].map((k) => c.drafts.get(k)).filter((d): d is StyleDraft => !!d);
     const pending = c.changes.length + (c.orderChanged ? 1 : 0);
+    // The list is for picking and ticking styles; building and importing get the full width.
+    const showList = mode === "edit" || mode === "find" || mode === "review";
+    const renderPreviewColumn = (draft: StyleDraft) => (
+                            <div style={{
+                                width: 300,
+                                flexShrink: 0,
+                                height: "100%",
+                                overflowY: "auto",
+                                boxSizing: "border-box",
+                                padding: 12,
+                                borderRadius: 8,
+                                background: "var(--figma-color-bg-secondary)",
+                            }}>
+                                <StylePreview
+                                    draft={draft}
+                                    index={c.index}
+                                    modes={c.modes}
+                                    onModesChange={c.setModes}
+                                    sampleText={c.sampleText}
+                                    onSampleTextChange={c.setSampleText}
+                                    exact={c.exact}
+                                    usage={draft.id ? c.usage.get(draft.id) : undefined}
+                                    onCancelUsage={() => draft.id && c.cancelUsage(draft.id)}
+                                    onRecountUsage={() => draft.id && c.requestUsage(draft.id)}
+                                />
+                            </div>
+    );
     const allDrafts = c.order.map((k) => c.drafts.get(k)).filter((d): d is StyleDraft => !!d);
 
     return (
@@ -123,23 +152,10 @@ export const StyleComposer: React.FC = () => {
                 <BetaBadge />
                 <div style={{ flex: 1 }} />
                 {mode === "edit" && !readOnly && (
-                    choosingKind ? (
-                        <>
-                            {STYLE_KINDS.map((k) => (
-                                <Button key={k} variant="secondary" onClick={() => { c.createStyle(k); setChoosingKind(false); }}>
-                                    {STYLE_KIND_LABELS[k]}
-                                </Button>
-                            ))}
-                            <Button variant="text" onClick={() => setChoosingKind(false)}>Cancel</Button>
-                        </>
-                    ) : (
-                        <>
-                            <Button variant="secondary" onClick={() => setChoosingKind(true)}>New style</Button>
-                            <Button variant="secondary" onClick={() => setMode("generate")}>Generate from variables</Button>
-                            <Button variant="secondary" onClick={() => setMode("liblib")}>Apply LibLib snapshot</Button>
-                            <Button variant="secondary" onClick={() => setMode("find")}>Find &amp; replace</Button>
-                        </>
-                    )
+                    <>
+                        <Button variant="secondary" onClick={() => setMode("find")}>Find &amp; replace</Button>
+                        <Button variant="secondary" onClick={() => setMode("liblib")}>Apply LibLib snapshot</Button>
+                    </>
                 )}
                 {mode === "edit" && (
                     <>
@@ -189,8 +205,9 @@ export const StyleComposer: React.FC = () => {
 
             {/* Each column scrolls on its own, so the list, editor and preview stay in view. */}
             <Flex gap="4" style={{ flex: 1, minHeight: 0, alignItems: "stretch", overflow: "hidden" }}>
-                <Flex direction="column" style={{ width: 240, flexShrink: 0, minHeight: 0, height: "100%" }}>
+                {showList && <Flex direction="column" style={{ width: 240, flexShrink: 0, minHeight: 0, height: "100%" }}>
                     <StyleList
+                        onNew={readOnly ? undefined : () => setMode("new")}
                         order={c.order}
                         drafts={c.drafts}
                         deleted={c.deleted}
@@ -202,7 +219,7 @@ export const StyleComposer: React.FC = () => {
                         onCheckedChange={c.setChecked}
                         onMove={readOnly ? undefined : c.moveStyle}
                     />
-                </Flex>
+                </Flex>}
 
                 {mode === "review" && (
                     <ReviewPanel
@@ -220,6 +237,21 @@ export const StyleComposer: React.FC = () => {
                     />
                 )}
 
+                {mode === "new" && (
+                    <StyleBuilder
+                        existing={allDrafts}
+                        variables={c.catalog.variables}
+                        index={c.index}
+                        modes={c.modes}
+                        libraryLoading={c.libraryLoading}
+                        renderPreview={renderPreviewColumn}
+                        onDraftChange={c.setPreviewDraft}
+                        onAdd={(draft, another) => { c.addDrafts([draft]); if (!another) setMode("edit"); }}
+                        onBatch={() => setMode("generate")}
+                        onCancel={() => setMode("edit")}
+                    />
+                )}
+
                 {mode === "generate" && (
                     <GeneratorPanel
                         variables={c.catalog.variables}
@@ -228,7 +260,7 @@ export const StyleComposer: React.FC = () => {
                         settings={c.settings}
                         onSaveSettings={c.saveSettings}
                         onAdd={c.addDrafts}
-                        onClose={() => setMode("edit")}
+                        onClose={() => setMode("new")}
                     />
                 )}
 
@@ -271,29 +303,7 @@ export const StyleComposer: React.FC = () => {
                                     onRevert={selected.id && c.dirtyKeys.has(selected.key) ? () => c.revert(selected.key) : undefined}
                                 />
                             </div>
-                            <div style={{
-                                width: 300,
-                                flexShrink: 0,
-                                height: "100%",
-                                overflowY: "auto",
-                                boxSizing: "border-box",
-                                padding: 12,
-                                borderRadius: 8,
-                                background: "var(--figma-color-bg-secondary)",
-                            }}>
-                                <StylePreview
-                                    draft={selected}
-                                    index={c.index}
-                                    modes={c.modes}
-                                    onModesChange={c.setModes}
-                                    sampleText={c.sampleText}
-                                    onSampleTextChange={c.setSampleText}
-                                    exact={c.exact}
-                                    usage={selected.id ? c.usage.get(selected.id) : undefined}
-                                    onCancelUsage={() => selected.id && c.cancelUsage(selected.id)}
-                                    onRecountUsage={() => selected.id && c.requestUsage(selected.id)}
-                                />
-                            </div>
+                            {renderPreviewColumn(selected)}
                         </>
                     ) : (
                         <Flex direction="column" gap="2" style={{ flex: 1 }}>

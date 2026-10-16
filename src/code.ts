@@ -22,7 +22,7 @@ figma.showUI(__html__, { width: 800, height: 500, themeColors: true });
  */
 figma.on('run', ({ command }) => {
     // The composer shows a style list, an editor and a preview side by side.
-    if (command === PluginCommands.COMPOSE_STYLES) {
+    if (typeof command === "string" && command.startsWith("compose-")) {
         figma.ui.resize(1040, 680);
     }
     // Send the command to UI immediately when plugin starts

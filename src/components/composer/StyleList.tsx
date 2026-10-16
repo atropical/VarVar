@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Flex, Input, Text } from "figma-kit";
+import { Button, Flex, Input, Text } from "figma-kit";
 import type { StyleDraft, StyleKind } from "../../composer/types";
 import { STYLE_KINDS, STYLE_KIND_LABELS } from "../../composer/types";
 import { paintsToCss } from "../../composer/css";
@@ -19,6 +19,8 @@ interface StyleListProps {
     onCheckedChange: (checked: Set<string>) => void;
     /** Reorders a style within its folder; omitted when read-only. */
     onMove?: (key: string, delta: -1 | 1) => void;
+    /** Opens the new-style builder; omitted when read-only. */
+    onNew?: () => void;
 }
 
 const Swatch: React.FC<{ draft: StyleDraft; index: CatalogIndex }> = ({ draft, index }) => {
@@ -35,7 +37,7 @@ const Swatch: React.FC<{ draft: StyleDraft; index: CatalogIndex }> = ({ draft, i
  * kind, grouped by the folder part of the name. Checkboxes build the
  * selection bulk actions work on; clicking a row opens it in the editor.
  */
-export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, dirtyKeys, selectedKey, checked, index, onSelect, onCheckedChange, onMove }) => {
+export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, dirtyKeys, selectedKey, checked, index, onSelect, onCheckedChange, onMove, onNew }) => {
     const [query, setQuery] = useState("");
     const [kinds, setKinds] = useState<Set<StyleKind>>(new Set(STYLE_KINDS));
 
@@ -65,6 +67,7 @@ export const StyleList: React.FC<StyleListProps> = ({ order, drafts, deleted, di
 
     return (
         <Flex direction="column" gap="2" style={{ minHeight: 0, flex: 1, height: "100%", overflow: "hidden" }}>
+            {onNew && <Button variant="secondary" fullWidth onClick={onNew}>+ New style</Button>}
             <Input placeholder="Search styles" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search styles" />
             <Flex gap="1" style={{ flexWrap: "wrap" }}>
                 {STYLE_KINDS.map((k) => {

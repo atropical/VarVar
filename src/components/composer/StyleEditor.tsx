@@ -18,8 +18,9 @@ interface StyleEditorProps {
     libraryLoading: boolean;
     readOnly: boolean;
     onChange: (next: StyleDraft) => void;
-    onDelete: () => void;
-    onDuplicate: () => void;
+    /** Omitted for a draft that isn't in the list yet (the new-style builder). */
+    onDelete?: () => void;
+    onDuplicate?: () => void;
     onRevert?: () => void;
 }
 
@@ -112,10 +113,12 @@ export const StyleEditor: React.FC<StyleEditorProps> = ({
                 <Text style={muted}>{STYLE_KIND_LABELS[draft.kind]} style{draft.id ? "" : " · new"}</Text>
                 <div style={{ flex: 1 }} />
                 {onRevert && <Button variant="secondary" onClick={onRevert} disabled={readOnly}>Revert</Button>}
-                <Button variant="secondary" onClick={onDuplicate} disabled={readOnly}>Duplicate</Button>
-                <Button variant={isDeleted ? "secondary" : "destructive"} onClick={onDelete} disabled={readOnly}>
-                    {isDeleted ? "Keep" : "Delete"}
-                </Button>
+                {onDuplicate && <Button variant="secondary" onClick={onDuplicate} disabled={readOnly}>Duplicate</Button>}
+                {onDelete && (
+                    <Button variant={isDeleted ? "secondary" : "destructive"} onClick={onDelete} disabled={readOnly}>
+                        {isDeleted ? "Keep" : "Delete"}
+                    </Button>
+                )}
             </Flex>
             {isDeleted && <Text style={{ color: "var(--figma-color-text-danger)" }}>Marked for deletion — applied after review.</Text>}
 

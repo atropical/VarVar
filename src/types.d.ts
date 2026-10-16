@@ -90,7 +90,10 @@ export enum PluginCommands {
   EXPORT_CSS = "export-css",
   EXPORT_JS = "export-js",
   IMPORT_JSON = "import-json",
-  COMPOSE_STYLES = "compose-styles"
+  COMPOSE_STYLES = "compose-styles",
+  COMPOSE_FIND = "compose-find",
+  COMPOSE_NEW = "compose-new",
+  COMPOSE_LIBLIB = "compose-liblib"
 }
 
 /**

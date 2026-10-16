@@ -49,7 +49,13 @@ const App: React.FC = () => {
         case PluginCommands.IMPORT_JSON:
             return <ImportJSON editorType={editorType} />;
         case PluginCommands.COMPOSE_STYLES:
-            return <StyleComposer />;
+            return <StyleComposer initialMode="edit" />;
+        case PluginCommands.COMPOSE_FIND:
+            return <StyleComposer initialMode="find" />;
+        case PluginCommands.COMPOSE_NEW:
+            return <StyleComposer initialMode="new" />;
+        case PluginCommands.COMPOSE_LIBLIB:
+            return <StyleComposer initialMode="liblib" />;
         case PluginCommands.EXPORT_GENERIC:
         default:
             return <ExportView editorType={editorType} />;

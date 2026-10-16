@@ -169,21 +169,24 @@ export const useComposer = () => {
     }, [resetFromDocument]);
 
     const selected = selectedKey ? drafts.get(selectedKey) ?? null : null;
+    /** A draft outside the list (the new-style builder's) that the previews follow instead of the selection. */
+    const [previewDraft, setPreviewDraft] = useState<StyleDraft | null>(null);
+    const previewed = previewDraft ?? selected;
 
     // Exact preview: debounced, and only the newest request's answer is shown.
     useEffect(() => {
         window.clearTimeout(previewTimer.current);
-        if (!selected || selected.kind === "GRID") {
+        if (!previewed || previewed.kind === "GRID") {
             setExact({ pending: false });
             return;
         }
         setExact((prev) => ({ ...prev, pending: true }));
         previewTimer.current = window.setTimeout(() => {
             const requestId = ++previewRequest.current;
-            post({ type: ComposerMessages.PREVIEW, requestId, draft: selected, modes, sampleText });
+            post({ type: ComposerMessages.PREVIEW, requestId, draft: previewed, modes, sampleText });
         }, PREVIEW_DEBOUNCE_MS);
         return () => window.clearTimeout(previewTimer.current);
-    }, [selected, modes, sampleText]);
+    }, [previewed, modes, sampleText]);
 
     const requestUsage = useCallback((styleId: string) => {
         setUsage((prev) => new Map(prev).set(styleId, { status: "counting" }));
@@ -307,7 +310,7 @@ export const useComposer = () => {
     return {
         loaded, canEdit, catalog, index, libraryLoading, settings, saveSettings,
         order, drafts, original, deleted, dirtyKeys, changes, orderChanged, moveStyle,
-        selected, selectedKey, setSelectedKey, checked, setChecked,
+        selected, selectedKey, setSelectedKey, checked, setChecked, setPreviewDraft,
         modes, setModes, sampleText, setSampleText, exact,
         usage, requestUsage, cancelUsage,
         updateDraft, updateMany, addDrafts, createStyle, duplicateStyle, toggleDelete, markDeleted, revert, discardAll,
