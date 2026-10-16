@@ -31,6 +31,9 @@ export const styleToDraft = (s: BaseStyle): StyleDraft => {
             return { ...base, kind: "EFFECT", effects: plain(s.effects) as Effect[] };
         case "GRID":
             return { ...base, kind: "GRID", grids: plain(s.layoutGrids) as LayoutGrid[] };
+        default:
+            // Animation styles aren't composer styles; readLocalStyles never asks for them.
+            throw new Error(`Unsupported style type ${s.type}`);
     }
 };
 

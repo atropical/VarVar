@@ -194,6 +194,9 @@ async function writeDraft(style: BaseStyle, draft: StyleDraft, ctx: WriteContext
             return true;
         case "TEXT":
             return draft.text ? applyText(style, draft.text, ctx, draft.name) : false;
+        default:
+            ctx.warnings.push(`${draft.name}: ${style.type.toLowerCase()} styles can't be edited here.`);
+            return false;
     }
 }
 
