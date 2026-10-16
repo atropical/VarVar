@@ -1,10 +1,11 @@
 import React from "react";
 import { Flex, Switch, Label, Select, Input, Text } from "figma-kit";
-import { OutputFormats, MessageTypes } from "../types.d";
+import { OutputFormats } from "../types.d";
 import type { ExportUnit } from "../types.d";
 import { EXPORT_UNITS, normalizeRootFontSize } from "../utils/units";
 import { formatFloat32 } from "../utils/numberFormat";
 import { HelpTip } from "./HelpTip";
+import { ExternalLink } from "./ExternalLink";
 
 interface ExportOptionsProps {
     format: OutputFormats;
@@ -69,24 +70,6 @@ const Footnote: React.FC<{ children: React.ReactNode; indent?: boolean }> = ({ c
     >
         {children}
     </Text>
-);
-
-/**
- * A plugin iframe can't navigate the browser itself, so a link asks the plugin
- * sandbox to do it: the sandbox answers `MessageTypes.OPEN_EXTERNAL` with
- * `figma.openExternal(url)`. Rendered as a real <button> so it stays keyboard
- * reachable, styled to read as a link.
- */
-const ExternalLink: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => (
-    <button
-        type="button"
-        onClick={() => {
-            parent.postMessage({ pluginMessage: { type: MessageTypes.OPEN_EXTERNAL, url: href } }, "*");
-        }}
-        style={{ appearance: 'none', background: 'none', border: 'none', padding: 0, margin: 0, font: 'inherit', color: 'var(--figma-color-text-brand)', textDecoration: 'underline', cursor: 'pointer' }}
-    >
-        {children}
-    </button>
 );
 
 /**
