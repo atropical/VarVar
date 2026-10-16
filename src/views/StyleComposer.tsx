@@ -14,6 +14,58 @@ import type { StyleDraft } from "../composer/types";
 
 type Mode = "edit" | "review" | "generate" | "find" | "liblib";
 
+/** Breadcrumb label per view; "edit" shows the selected style instead. */
+const MODE_LABELS: Record<Exclude<Mode, "edit">, string> = {
+    review: "Review changes",
+    generate: "Generate from variables",
+    find: "Find & replace variables",
+    liblib: "Apply LibLib snapshot",
+};
+
+const crumbStyle: React.CSSProperties = {
+    all: "unset",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--figma-color-text-secondary)",
+};
+
+/**
+ * Where you are: "Styles › Find & replace variables", or in the editor
+ * "Styles › Text · UI › X-Large". "Styles" always leads back to the editor.
+ */
+const Breadcrumb: React.FC<{ mode: Mode; style: StyleDraft | null; onHome: () => void }> = ({ mode, style, onHome }) => {
+    const trail: string[] = [];
+    if (mode !== "edit") trail.push(MODE_LABELS[mode]);
+    else if (style) {
+        const parts = style.name.split("/");
+        trail.push([STYLE_KIND_LABELS[style.kind], ...parts.slice(0, -1)].join(" · "), parts[parts.length - 1] || "(unnamed)");
+    }
+    return (
+        <nav aria-label="Location" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            {mode === "edit" && trail.length === 0 ? (
+                <Text size="large" weight="strong">Styles</Text>
+            ) : (
+                <button type="button" style={crumbStyle} onClick={onHome} title="Back to the style editor">Styles</button>
+            )}
+            {trail.map((label, i) => (
+                <React.Fragment key={i}>
+                    <Text style={{ color: "var(--figma-color-text-tertiary, var(--figma-color-text-secondary))" }} aria-hidden>›</Text>
+                    <Text
+                        size={i === trail.length - 1 ? "large" : undefined}
+                        weight={i === trail.length - 1 ? "strong" : undefined}
+                        aria-current={i === trail.length - 1 ? "page" : undefined}
+                        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: i === trail.length - 1 ? undefined : "var(--figma-color-text-secondary)" }}
+                    >
+                        {label}
+                    </Text>
+                </React.Fragment>
+            ))}
+        </nav>
+    );
+};
+
 const Banner: React.FC<{ tone?: "info" | "warning"; children: React.ReactNode }> = ({ tone = "info", children }) => (
     <Flex
         gap="2"
@@ -67,7 +119,7 @@ export const StyleComposer: React.FC = () => {
             overflow: "hidden",
         }}>
             <Flex gap="2" align="center" style={{ flexWrap: "wrap" }}>
-                <Text size="large" weight="strong">Compose styles</Text>
+                <Breadcrumb mode={mode} style={selected} onHome={() => setMode("edit")} />
                 <BetaBadge />
                 <div style={{ flex: 1 }} />
                 {mode === "edit" && !readOnly && (
@@ -83,7 +135,7 @@ export const StyleComposer: React.FC = () => {
                     ) : (
                         <>
                             <Button variant="secondary" onClick={() => setChoosingKind(true)}>New style</Button>
-                            <Button variant="secondary" onClick={() => setMode("generate")}>Generate from tokens</Button>
+                            <Button variant="secondary" onClick={() => setMode("generate")}>Generate from variables</Button>
                             <Button variant="secondary" onClick={() => setMode("liblib")}>Apply LibLib snapshot</Button>
                             <Button variant="secondary" onClick={() => setMode("find")}>Find &amp; replace</Button>
                         </>

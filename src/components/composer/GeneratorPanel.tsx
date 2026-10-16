@@ -97,7 +97,6 @@ export const GeneratorPanel: React.FC<GeneratorPanelProps> = ({ variables, exist
     return (
         <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
             <Flex gap="2" align="center">
-                <Text size="large" weight="strong">Generate styles from tokens</Text>
                 <div style={{ flex: 1 }} />
                 <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button variant="primary" disabled={chosen.length === 0} onClick={add}>

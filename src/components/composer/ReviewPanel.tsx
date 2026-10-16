@@ -34,7 +34,6 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ changes, orderChanged,
     return (
         <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
             <Flex gap="2" align="center">
-                <Text size="large" weight="strong">Review changes</Text>
                 <div style={{ flex: 1 }} />
                 <Button variant="secondary" onClick={onBack} disabled={applying}>Back to editing</Button>
                 <Button

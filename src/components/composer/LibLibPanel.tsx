@@ -39,7 +39,6 @@ export const LibLibPanel: React.FC<LibLibPanelProps> = ({ existing, variables, o
     return (
         <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <Flex gap="2" align="center">
-                <Text size="large" weight="strong">Apply LibLib snapshot</Text>
                 <div style={{ flex: 1 }} />
                 <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button

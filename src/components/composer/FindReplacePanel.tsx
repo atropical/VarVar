@@ -59,7 +59,6 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({ allDrafts, c
     return (
         <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
             <Flex gap="2" align="center">
-                <Text size="large" weight="strong">Find &amp; replace variables</Text>
                 <div style={{ flex: 1 }} />
                 <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button variant="primary" disabled={kept.length === 0} onClick={() => onApply(applyMatches(targets, kept))}>
