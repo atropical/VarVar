@@ -148,8 +148,9 @@ export const StyleComposer: React.FC<{ initialMode?: ComposerMode }> = ({ initia
             overflow: "hidden",
         }}>
             <Flex gap="2" align="center" style={{ flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--figma-color-border)" }}>
-                <Breadcrumb mode={mode} style={selected} onHome={() => setMode("edit")} />
+                {/* Before the breadcrumb, so it stays put while the trail changes length. */}
                 <BetaBadge />
+                <Breadcrumb mode={mode} style={selected} onHome={() => setMode("edit")} />
                 <div style={{ flex: 1 }} />
                 {mode === "edit" && !readOnly && (
                     <>
