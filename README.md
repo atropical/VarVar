@@ -179,7 +179,7 @@ Access format-specific exports directly from the Figma menu:
 For format selection within the interface:
 
 1. Open your Figma file containing variables
-2. Go to **Plugins** → **VarVar** → **Export Variables**
+2. Go to **Plugins** → **VarVar** → **Export as…** → **All Formats**
 3. Choose your desired export format
 4. Configure filename and options
 5. Click "Export Variables"

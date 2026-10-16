@@ -12,14 +12,11 @@ export default {
         { "command": "export-json", "name": "JSON" },
         { "command": "export-js", "name": "JavaScript" },
         { "command": "export-csv", "name": "CSV" },
-        { "command": "export-css", "name": "CSS & Tailwind" }
+        { "command": "export-css", "name": "CSS & Tailwind" },
+        {"separator": true},
+        { "command": "export", "name": "All Formats" }
       ]
     },
-    {"separator": true},
-    { "command": "export", "name": "Export Variables" },
-    {"separator": true},
-    { "command": "import-json", "name": "Import…" },
-    {"separator": true},
     {"name": "Styles (BETA)",
       "menu": [
         { "command": "compose-styles", "name": "Edit & Bind Variables…" },
@@ -27,7 +24,9 @@ export default {
         { "command": "compose-new", "name": "New Style from Variables…" },
         { "command": "compose-liblib", "name": "Apply LibLib Snapshot…" }
       ]
-    }
+    },
+    {"separator": true},
+    { "command": "import-json", "name": "Import…" }
   ],
   "permissions": ["teamlibrary"],
   "documentAccess": "dynamic-page",
