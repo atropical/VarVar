@@ -44,7 +44,8 @@ interface ImportRecord {
   modeName: string;
   pathParts: string[];
   resolvedType: VariableResolvedDataType;
-  scopes: VariableScope[];
+  /** `undefined` when the file has no scopes key — distinct from `[]`, which hides the variable from every picker. */
+  scopes: VariableScope[] | undefined;
   description: string;
   codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
@@ -143,7 +144,7 @@ function dtcgFallbackType(rawType: string, rawValue: unknown): {
  */
 function normalizeLeaf(node: Record<string, unknown>): {
   resolvedType: VariableResolvedDataType | undefined;
-  scopes: VariableScope[];
+  scopes: VariableScope[] | undefined;
   description: string;
   codeSyntax: CodeSyntaxMap | undefined;
   rawValue: unknown;
@@ -164,7 +165,10 @@ function normalizeLeaf(node: Record<string, unknown>): {
     : undefined;
   const resolvedType = declaredType ?? fallback?.resolvedType;
 
-  const scopes = figma?.scopes ?? (node.$scopes as VariableScope[] | undefined) ?? [];
+  // A missing key leaves scopes alone; an explicit `[]` is kept, since in
+  // Figma it means "hidden from every picker" (still aliasable).
+  const rawScopes = figma?.scopes ?? node.$scopes;
+  const scopes = Array.isArray(rawScopes) ? (rawScopes as VariableScope[]) : undefined;
   const description = (node.$description as string) ?? "";
   // Absent in legacy (v2.x) and plain DTCG files, so it stays optional
   // throughout — a file that says nothing about code syntax never touches it.
@@ -732,6 +736,16 @@ function applyScopes(
   }
 }
 
+/**
+ * Whether the file's scopes should be written. A missing key and
+ * `ALL_SCOPES` leave the variable as it is (a new one starts on Figma's
+ * default, ALL_SCOPES); `[]` is written, hiding it from every picker.
+ * @param scopes - The scopes the file carries, `undefined` if it has none
+ */
+function shouldWriteScopes(scopes: VariableScope[] | undefined): boolean {
+  return scopes !== undefined && !scopes.includes("ALL_SCOPES");
+}
+
 function scopesEqual(a: VariableScope[], b: VariableScope[]): boolean {
   if (a.length !== b.length) return false;
   const setB = new Set(b);
@@ -943,9 +957,9 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
       // Only touch description/scopes/code syntax — and only count this as a
       // real update — when they actually differ, so an unchanged re-import of
       // an identical file is a true no-op rather than a no-op-with-a-write.
-      const willWriteScopes = record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES");
+      const willWriteScopes = shouldWriteScopes(record.scopes);
       const descriptionChanged = existingVariable.description !== record.description;
-      const scopesChanged = willWriteScopes && !scopesEqual(existingVariable.scopes, record.scopes);
+      const scopesChanged = willWriteScopes && !scopesEqual(existingVariable.scopes, record.scopes!);
       const codeSyntaxDiff = buildCodeSyntaxDiff(existingVariable.codeSyntax, record.codeSyntax);
       const codeSyntaxChanged = codeSyntaxDiff.some((entry) => entry.changed);
       if (codeSyntaxDiff.length > 0) diffEntry.codeSyntax = codeSyntaxDiff;
@@ -955,7 +969,7 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
         summary.codeSyntaxSet += codeSyntaxDiff.filter((entry) => entry.changed).length;
       } else if (varRef.real) {
         if (descriptionChanged) varRef.real.description = record.description;
-        if (scopesChanged) applyScopes(varRef.real, record.scopes, summary, record.collectionName, varName);
+        if (scopesChanged) applyScopes(varRef.real, record.scopes!, summary, record.collectionName, varName);
         applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
     } else {
@@ -981,8 +995,8 @@ async function runImport(rawFiles: string[], importMode: ImportMode, dryRun: boo
         summary.codeSyntaxSet += codeSyntaxDiff.length;
       } else if (varRef.real) {
         varRef.real.description = record.description;
-        if (record.scopes.length > 0 && !record.scopes.includes("ALL_SCOPES")) {
-          applyScopes(varRef.real, record.scopes, summary, record.collectionName, varName);
+        if (shouldWriteScopes(record.scopes)) {
+          applyScopes(varRef.real, record.scopes!, summary, record.collectionName, varName);
         }
         applyCodeSyntax(varRef.real, codeSyntaxDiff, summary, record.collectionName, varName);
       }
